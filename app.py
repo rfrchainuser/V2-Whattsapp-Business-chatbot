@@ -242,9 +242,9 @@ def forgot_password():
             server.login(get_setting('smtp_username'), get_setting('smtp_password'))
             server.sendmail(get_setting('smtp_username'), email, msg.as_string())
             server.quit()
-            return 'Reset link sent to your email.'
+            return jsonify({'success': True, 'message': 'Reset link sent to your email.'})
         except Exception as e:
-            return f'Error sending email: {str(e)}'
+            return jsonify({'success': False, 'error': f'Error sending email: {str(e)}'}), 500
     return render_template('forgot_password.html')
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
@@ -276,13 +276,34 @@ def get_faqs():
     cursor.execute('SELECT id, question, answer, parent_id FROM faqs ORDER BY created_at DESC')
     faqs = cursor.fetchall()
     conn.close()
+    # Build a tree of FAQs with IDs included (needed by frontend for edit/delete)
     faq_tree = {}
     for faq in faqs:
-        if faq[3] is None:
-            faq_tree[faq[0]] = {'question': faq[1], 'answer': faq[2], 'sub_faqs': []}
+        fid, question, answer, parent_id = faq
+        if parent_id is None:
+            faq_tree[fid] = {
+                'id': fid,
+                'question': question,
+                'answer': answer,
+                'parent_id': None,
+                'sub_faqs': []
+            }
         else:
-            if faq[3] in faq_tree:
-                faq_tree[faq[3]]['sub_faqs'].append({'question': faq[1], 'answer': faq[2]})
+            # If parent already in tree, append as sub-FAQ; otherwise, create a placeholder parent
+            if parent_id not in faq_tree:
+                faq_tree[parent_id] = {
+                    'id': parent_id,
+                    'question': '',
+                    'answer': '',
+                    'parent_id': None,
+                    'sub_faqs': []
+                }
+            faq_tree[parent_id]['sub_faqs'].append({
+                'id': fid,
+                'question': question,
+                'answer': answer,
+                'parent_id': parent_id
+            })
     return jsonify(list(faq_tree.values()))
 
 @app.route('/add_faq', methods=['POST'])
@@ -315,6 +336,86 @@ def update_faq(faq_id):
     conn.close()
     return jsonify({'success': True})
 
+# -------- API aliases (to match frontend /api/* endpoints) --------
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+@login_required
+def api_settings():
+    return settings()
+
+@app.route('/api/faqs', methods=['GET'])
+@login_required
+def api_get_faqs():
+    return get_faqs()
+
+@app.route('/api/faqs', methods=['POST'])
+@login_required
+def api_add_faq():
+    return add_faq()
+
+@app.route('/api/faqs/<int:faq_id>', methods=['PUT'])
+@login_required
+def api_update_faq(faq_id):
+    return update_faq(faq_id)
+
+@app.route('/api/faqs/<int:faq_id>', methods=['DELETE'])
+@login_required
+def api_delete_faq(faq_id):
+    return delete_faq(faq_id)
+
+@app.route('/api/export-faqs', methods=['GET'])
+@login_required
+def api_export_faqs():
+    return export_faqs()
+
+@app.route('/api/import-faqs', methods=['POST'])
+@login_required
+def api_import_faqs():
+    return import_faqs()
+
+@app.route('/api/chat', methods=['POST'])
+@login_required
+def api_chat():
+    data = request.get_json(silent=True) or {}
+    message = data.get('message', '').strip()
+    response_text = find_response(message) if message else get_setting('greeting_message', 'Hello!')
+    return jsonify({'response': response_text, 'suggestions': []})
+
+@app.route('/api/faq-answer/<int:faq_id>', methods=['GET'])
+@login_required
+def api_faq_answer(faq_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, question, answer FROM faqs WHERE id = ?', (faq_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'FAQ not found'}), 404
+    cursor.execute('SELECT id, question, answer FROM faqs WHERE parent_id = ?', (faq_id,))
+    subs = cursor.fetchall()
+    conn.close()
+    return jsonify({
+        'id': row[0],
+        'question': row[1],
+        'answer': row[2],
+        'sub_faqs': [{'id': s[0], 'question': s[1], 'answer': s[2]} for s in subs]
+    })
+
+@app.route('/api/send-test', methods=['POST'])
+@login_required
+def api_send_test():
+    data = request.get_json(silent=True) or {}
+    to = data.get('to')
+    message = data.get('message', '')
+    if not to:
+        return jsonify({'success': False, 'error': 'Missing recipient "to"'}), 400
+    try:
+        # Prefer to use the existing helper; if not configured properly, it may fail silently.
+        send_whatsapp_message(to, message)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # JSON error handlers to avoid HTML responses in API calls
 @app.errorhandler(RequestEntityTooLarge)
 def handle_file_too_large(e):
@@ -324,6 +425,7 @@ def handle_file_too_large(e):
 def handle_http_exception(e):
     # For API endpoints, prefer JSON over HTML default pages
     api_like = (
+        request.path.startswith('/api/') or
         request.path.startswith('/import_faqs') or
         request.path.startswith('/export_faqs') or
         request.path.startswith('/webhook') or
@@ -342,6 +444,7 @@ def handle_http_exception(e):
 @app.errorhandler(Exception)
 def handle_unexpected_exception(e):
     api_like = (
+        request.path.startswith('/api/') or
         request.path.startswith('/import_faqs') or
         request.path.startswith('/export_faqs') or
         request.path.startswith('/webhook') or
