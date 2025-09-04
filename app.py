@@ -544,7 +544,7 @@ def api_chat():
     message = data.get('message', '').strip()
     # Content moderation for chat UI as well
     if message and is_moderated(message):
-        warn = 'Your message contains blocked content. Please rephrase.'
+        warn = "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment."
         # Provide suggestions anyway
         suggestions = get_main_faq_suggestions(limit=6)
         return jsonify({'response': warn, 'suggestions': suggestions})
@@ -698,7 +698,7 @@ def webhook():
             text = message.get('text', {}).get('body', '') if isinstance(message.get('text'), dict) else ''
             # Moderate content: reply with warning and do not process further
             if text and is_moderated(text):
-                send_whatsapp_message(sender, 'Your message contains blocked content. Please rephrase.')
+                send_whatsapp_message(sender, "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment.")
                 return 'Moderated', 200
             # Greeting logic per WhatsApp sender
             try:
