@@ -582,7 +582,7 @@ def api_clear_training():
 def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
-    HANDOFF_MSG = "Thank you for your message. Our team will respond to you shortly."
+    HANDOFF_MSG = "Please leave us a message. We value your interest and will respond to your questions promptly."
     # Content moderation for chat UI as well
     if message and is_moderated(message):
         warn = "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment."
@@ -631,7 +631,7 @@ def api_faq_answer(faq_id):
         qtext = (row[1] or '').strip()
         if re.search(r"\badditional\s+inquir", qtext, re.IGNORECASE):
             session['handoff'] = True
-            handoff_text = "Thank you for your message. Our team will respond to you shortly."
+            handoff_text = "Please leave us a message. We value your interest and will respond to your questions promptly."
             return jsonify({
                 'id': row[0],
                 'question': row[1],
@@ -778,7 +778,7 @@ def webhook():
                 return 'Moderated', 200
             # Human handoff: if guest mentions additional inquiries, do not auto-reply; leave for staff
             if text and is_additional_inquiries(text):
-                send_whatsapp_message(sender, "Thank you for your message. Our team will respond to you shortly.")
+                send_whatsapp_message(sender, "Please leave us a message. We value your interest and will respond to your questions promptly.")
                 return 'Handoff to human', 200
             # Greeting logic per WhatsApp sender
             try:
