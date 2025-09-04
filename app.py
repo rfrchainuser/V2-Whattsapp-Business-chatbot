@@ -948,15 +948,16 @@ def import_faqs():
     except Exception as e:
         return jsonify({'error': f'Failed to read Excel file: {str(e)}'}), 400
     # Normalize column names to ease matching
-    normalized_cols = {c: c for c in df.columns}
     rename_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
-        if cl == 'question':
+        if cl == 'id':
+            rename_map[c] = 'ID'
+        elif cl == 'question':
             rename_map[c] = 'question'
         elif cl == 'answer':
             rename_map[c] = 'answer'
-        elif cl in ('parent id', 'parent_id'):
+        elif cl in ('parent id', 'parent_id', 'parentid'):
             rename_map[c] = 'parent_id'
         elif cl == 'type':
             rename_map[c] = 'Type'
@@ -967,73 +968,103 @@ def import_faqs():
     missing = [c for c in required if c not in df.columns]
     if missing:
         return jsonify({'error': f"Missing required columns: {', '.join(missing)}"}), 400
-    # Optional columns: parent_id and Type
+
     has_parent = 'parent_id' in df.columns
     has_type = 'Type' in df.columns
+    has_id = 'ID' in df.columns
+
+    # Helpers
+    def _parse_int(v):
+        try:
+            if v is None:
+                return None
+            if isinstance(v, float) and pd.isna(v):
+                return None
+            if isinstance(v, (int,)):
+                return int(v)
+            if isinstance(v, float):
+                return int(v)
+            s = str(v).strip()
+            if s == '':
+                return None
+            return int(float(s))
+        except Exception:
+            return None
+
+    # Preprocess rows into dicts for easier handling
+    rows = []
+    for _, r in df.iterrows():
+        q = ('' if (pd.isna(r['question']) if 'question' in r else True) else str(r['question']).strip())
+        a = ('' if (pd.isna(r['answer']) if 'answer' in r else True) else str(r['answer']).strip())
+        tval = None
+        if has_type:
+            tv = r['Type']
+            tval = ('' if pd.isna(tv) else str(tv)).strip().lower()
+        pval = _parse_int(r['parent_id']) if has_parent else None
+        oid = _parse_int(r['ID']) if has_id else None
+        rows.append({'orig_id': oid, 'question': q, 'answer': a, 'type': tval, 'parent_ref': pval})
+
+    # Determine mains vs subs
+    mains = []
+    subs = []
+    for item in rows:
+        is_main_by_type = item['type'] in ('main faq', 'main', 'root', 'top', 'top-level') if item['type'] else False
+        if is_main_by_type:
+            mains.append(item)
+        else:
+            # If type not specified, treat as main if no parent_ref
+            if item['parent_ref'] is None:
+                mains.append(item)
+            else:
+                subs.append(item)
+
+    inserted_mains = 0
+    inserted_subs = 0
+    skipped_subs = 0
+    id_map = {}  # maps original Excel ID -> DB ID
+
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        for _, row in df.iterrows():
-            q = str(row['question']).strip() if not pd.isna(row['question']) else ''
-            a = str(row['answer']).strip() if not pd.isna(row['answer']) else ''
-            pid = None
-            # Determine parent_id based on Type and/or parent_id field
-            tval = None
-            if has_type:
-                tv = row['Type']
-                tval = ('' if pd.isna(tv) else str(tv)).strip().lower()
-            if has_parent:
-                val = row['parent_id']
-            else:
-                val = None
-            # Helper to parse Parent ID flexibly (int, float like 1.0, or numeric string)
-            def _parse_parent_id(v):
-                try:
-                    if v is None:
-                        return None
-                    # Pandas may give NaN as float
-                    if isinstance(v, float) and pd.isna(v):
-                        return None
-                    if isinstance(v, (int,)):
-                        return int(v)
-                    if isinstance(v, float):
-                        return int(v)
-                    s = str(v).strip()
-                    if s == '':
-                        return None
-                    # Accept strings like '1' or '1.0'
-                    return int(float(s))
-                except Exception:
-                    raise
-            # Priority: if Type indicates Main FAQ, force pid=None
-            if tval in ('main faq', 'main', 'root', 'top', 'top-level'):
-                pid = None
-            elif tval in ('sub-faq', 'sub', 'child'):
-                # For Sub-FAQ, require a valid parent_id
-                try:
-                    pid = _parse_parent_id(val)
-                    if pid is None:
-                        return jsonify({'error': f'Missing Parent ID for Sub-FAQ: "{q}"'}), 400
-                except Exception:
-                    return jsonify({'error': f'Invalid Parent ID value for "{q}": {val}'}), 400
-            else:
-                # If Type is not provided, fall back to parent_id if present
-                if has_parent:
-                    try:
-                        pid = _parse_parent_id(val)
-                    except Exception:
-                        return jsonify({'error': f'Invalid Parent ID value: {val}'}), 400
-            cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (q, a, pid))
+        # First pass: insert mains
+        for m in mains:
+            cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (m['question'], m['answer'], None))
+            db_id = cursor.lastrowid
+            inserted_mains += 1
+            if m['orig_id'] is not None:
+                id_map[m['orig_id']] = db_id
+        # Second pass: insert subs with mapped parent IDs
+        for s in subs:
+            pref = s['parent_ref']
+            db_parent = None
+            if pref is not None:
+                db_parent = id_map.get(pref)
+            if db_parent is None:
+                # Parent not found; skip safely
+                skipped_subs += 1
+                continue
+            cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (s['question'], s['answer'], db_parent))
+            inserted_subs += 1
         conn.commit()
     except Exception as e:
         try:
-            conn.rollback()
+            if conn:
+                conn.rollback()
         except Exception:
             pass
         return jsonify({'error': f'Database error during import: {str(e)}'}), 500
     finally:
         try:
-            conn.close()
+            if conn:
+                conn.close()
         except Exception:
             pass
-    return jsonify({'success': True, 'message': 'FAQs imported successfully.'})
+
+    return jsonify({
+        'success': True,
+        'message': 'FAQs imported successfully.',
+        'inserted_main': inserted_mains,
+        'inserted_sub': inserted_subs,
+        'skipped_sub': skipped_subs
+    })
