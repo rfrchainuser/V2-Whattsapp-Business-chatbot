@@ -13,7 +13,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from werkzeug.security import generate_password_hash, check_password_hash
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from html import unescape
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -335,6 +335,66 @@ def update_faq(faq_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+# New: API endpoint matching frontend for training from a URL
+@app.route('/api/train-url', methods=['POST'])
+@login_required
+def api_train_url():
+    data = request.get_json(silent=True) or {}
+    url = (data.get('url') or '').strip()
+    deep = bool(data.get('deep', False))
+    try:
+        max_pages = int(data.get('max_pages', 50))
+    except Exception:
+        max_pages = 50
+    if not url:
+        return jsonify({'success': False, 'error': 'Missing url'}), 400
+    # Normalize URL scheme
+    if not url.lower().startswith(('http://', 'https://')):
+        url = 'http://' + url
+    parsed = urlparse(url)
+    if not parsed.netloc:
+        return jsonify({'success': False, 'error': 'Invalid URL'}), 400
+
+    crawled = 0
+    saved = 0
+    visited = set()
+    queue = [url]
+    domain = parsed.netloc
+    try:
+        while queue and crawled < max_pages:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            data = crawl_url(current)
+            crawled += 1
+            if data:
+                try:
+                    save_to_knowledge(data)
+                    saved += 1
+                except Exception:
+                    pass
+            # Enqueue links for deep crawl
+            if deep:
+                try:
+                    resp = requests.get(current, timeout=10)
+                    if resp.status_code == 200:
+                        links = re.findall(r'href=["\'](.*?)["\']', resp.text)
+                        for link in links:
+                            try:
+                                absolute = urljoin(current, link)
+                                p = urlparse(absolute)
+                                if p.scheme in ('http', 'https') and p.netloc == domain:
+                                    if absolute not in visited and absolute not in queue:
+                                        queue.append(absolute)
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+        return jsonify({'success': True, 'message': 'Training completed', 'pages_crawled': crawled, 'pages_saved': saved})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # -------- API aliases (to match frontend /api/* endpoints) --------
 
