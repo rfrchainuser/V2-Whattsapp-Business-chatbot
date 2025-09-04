@@ -490,6 +490,32 @@ def api_export_faqs():
 def api_import_faqs():
     return import_faqs()
 
+# New: Clear training data for the current domain (or specified domain)
+@app.route('/api/clear-training', methods=['POST'])
+@login_required
+def api_clear_training():
+    try:
+        data = request.get_json(silent=True) or {}
+        domain = (data.get('domain') or '').strip()
+        if not domain:
+            domain = get_setting('current_domain', None)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        if domain:
+            cursor.execute('DELETE FROM knowledge WHERE domain = ?', (domain,))
+        else:
+            # If no domain is set, clear legacy entries with NULL domain
+            cursor.execute('DELETE FROM knowledge WHERE domain IS NULL')
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        # Optionally reset current_domain if we cleared it
+        if domain and (data.get('reset_current', True)):
+            update_setting('current_domain', '')
+        return jsonify({'success': True, 'deleted': deleted, 'domain': domain or None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/chat', methods=['POST'])
 @login_required
 def api_chat():
