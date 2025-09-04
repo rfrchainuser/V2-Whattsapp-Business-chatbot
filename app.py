@@ -582,20 +582,24 @@ def api_clear_training():
 def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
-    HANDOFF_MSG = "Please leave us a message. We value your interest and will respond to your questions promptly."
+    # Two distinct handoff messages based on how the user indicates inquiries:
+    # - PLEASE_LEAVE_MSG: shown when user clicks the "Additional Inquiries" suggestion
+    # - THANK_YOU_MSG: shown when user types a message indicating inquiries or while handoff is active
+    PLEASE_LEAVE_MSG = "Please leave us a message. We value your interest and will respond to your questions promptly."
+    THANK_YOU_MSG = "Thank you for your message. Our team will respond to you shortly."
     # Content moderation for chat UI as well
     if message and is_moderated(message):
         warn = "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment."
         # Provide suggestions anyway
         suggestions = get_main_faq_suggestions(limit=9)
         return jsonify({'response': warn, 'suggestions': suggestions})
-    # Human handoff: do not auto-reply if user is asking for additional inquiries
+    # Human handoff: if user TYPES an inquiries message, thank and handoff
     if message and is_additional_inquiries(message):
         session['handoff'] = True
-        return jsonify({'response': HANDOFF_MSG, 'suggestions': [], 'restart_option': True})
+        return jsonify({'response': THANK_YOU_MSG, 'suggestions': [], 'restart_option': True})
     # If a previous selection triggered handoff, do not auto-reply to subsequent messages
     if session.get('handoff', False) and message:
-        return jsonify({'response': HANDOFF_MSG, 'suggestions': [], 'restart_option': True})
+        return jsonify({'response': THANK_YOU_MSG, 'suggestions': [], 'restart_option': True})
     # First-time behavior: greet only on the first NON-empty user message.
     if not session.get('welcomed_user', False):
         if message:
@@ -776,9 +780,9 @@ def webhook():
             if text and is_moderated(text):
                 send_whatsapp_message(sender, "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment.")
                 return 'Moderated', 200
-            # Human handoff: if guest mentions additional inquiries, do not auto-reply; leave for staff
+            # Human handoff: if guest TYPES inquiries, thank and leave for staff
             if text and is_additional_inquiries(text):
-                send_whatsapp_message(sender, "Please leave us a message. We value your interest and will respond to your questions promptly.")
+                send_whatsapp_message(sender, "Thank you for your message. Our team will respond to you shortly.")
                 return 'Handoff to human', 200
             # Greeting logic per WhatsApp sender
             try:
