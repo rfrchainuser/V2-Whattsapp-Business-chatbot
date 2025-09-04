@@ -11,7 +11,7 @@ app.use(bodyParser.json());
 
 // Configuration: Greeting message and moderation keywords
 const GREETING_MESSAGE = process.env.GREETING_MESSAGE || 'Dear Esteemed Guest, Welcome to Souq Waqif Boutique Hotels by Tivoli. I am your Virtual Butler and remain at your service. Please select from the options below for your convenience.';
-const MODERATION_WARNING = 'Your message contains blocked content. Please rephrase.';
+const MODERATION_WARNING = '🚫 Content Guidelines Reminder\nYour message contains language that doesn\'t align with our professional community guidelines. Please revise your content to maintain a respectful environment.';
 // Moderation patterns: dangerous, sexual, and cursing (word-boundary regex)
 const moderationPatterns = [
     // Cursing / profanity
