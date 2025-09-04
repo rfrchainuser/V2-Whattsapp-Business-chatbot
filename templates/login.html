@@ -219,7 +219,7 @@
         <div class="modal-content">
             <span class="close" onclick="closeForgotPasswordModal()">&times;</span>
             <h2>Reset Password</h2>
-            <form id="forgotPasswordForm" method="POST" action="/forgot-password">
+            <form id="forgotPasswordForm" method="POST" action="/forgot_password">
                 <div class="form-group">
                     <label for="email">Enter your email address:</label>
                     <input type="email" id="email" name="email" required placeholder="admin@example.com">
@@ -254,7 +254,7 @@
             e.preventDefault();
             const email = document.getElementById('email').value;
             
-            fetch('/forgot-password', {
+            fetch('/forgot_password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
