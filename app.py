@@ -319,7 +319,17 @@ def handle_file_too_large(e):
 @app.errorhandler(HTTPException)
 def handle_http_exception(e):
     # For API endpoints, prefer JSON over HTML default pages
-    api_like = request.path.startswith('/import_faqs') or request.path.startswith('/export_faqs') or request.path.startswith('/webhook')
+    api_like = (
+        request.path.startswith('/import_faqs') or
+        request.path.startswith('/export_faqs') or
+        request.path.startswith('/webhook') or
+        request.path.startswith('/train') or
+        request.path.startswith('/settings') or
+        request.path.startswith('/add_faq') or
+        request.path.startswith('/update_faq') or
+        request.path.startswith('/delete_faq') or
+        request.path.startswith('/faqs')
+    )
     if api_like:
         return jsonify({'error': e.description, 'code': e.code}), e.code
     return e
@@ -412,7 +422,10 @@ def send_whatsapp_message(to, text):
 @app.route('/train', methods=['POST'])
 @login_required
 def train():
-    urls = request.json['urls']
+    data = request.get_json(silent=True)
+    if not data or 'urls' not in data or not isinstance(data['urls'], list):
+        return jsonify({'error': 'Invalid payload. Expecting JSON body with key "urls" as a list.'}), 400
+    urls = data['urls']
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(crawl_url, url) for url in urls]
         for future in as_completed(futures):
