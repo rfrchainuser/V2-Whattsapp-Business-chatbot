@@ -10,8 +10,14 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from werkzeug.security import generate_password_hash, check_password_hash
-from urllib.parse import urlparse, urljoin
+# REPLACE lines 13-14 with:
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN')
+ACCESS_TOKEN = os.environ.get('ACCESS_TOKEN')
 from html import unescape
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
