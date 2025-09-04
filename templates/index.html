@@ -281,6 +281,9 @@
             transform: translateY(-50%);
             font-size: 10px;
         }
+        /* Restart conversation block */
+        .restart-block { margin-top: 10px; display: flex; }
+        .restart-block .btn { margin: 0; }
         
         .chat-input-area {
             background: white;
@@ -998,6 +1001,10 @@
                 if (botText) {
                     addMessageToChat(botText, 'bot', botImages);
                 }
+                // If backend indicates restart option, show restart UI
+                if (data && data.restart_option) {
+                    showRestartOption();
+                }
                 
                 // Add FAQ suggestions
                 if (data.suggestions && data.suggestions.length > 0) {
@@ -1135,6 +1142,9 @@
                 const data = await response.json();
                 
                 addMessageToChat(data.answer, 'bot');
+                if (data && data.restart_option) {
+                    showRestartOption();
+                }
                 
                 if (data.sub_faqs && data.sub_faqs.length > 0) {
                     addSuggestions(data.sub_faqs);
@@ -1147,6 +1157,41 @@
         function handleEnter(event) {
             if (event.key === 'Enter') {
                 sendMessage();
+            }
+        }
+
+        function showRestartOption() {
+            const chatArea = document.getElementById('chat-area');
+            // Remove any existing restart blocks
+            chatArea.querySelectorAll('.restart-block').forEach(el => el.remove());
+            const div = document.createElement('div');
+            div.className = 'restart-block';
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.textContent = '🔄 Restart conversation';
+            btn.onclick = restartConversation;
+            div.appendChild(btn);
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        async function restartConversation() {
+            try {
+                const resp = await fetch('/api/restart', { method: 'POST' });
+                const data = await resp.json();
+                // Reset chat UI
+                const chatArea = document.getElementById('chat-area');
+                chatArea.innerHTML = '';
+                // Reset used suggestions
+                usedSuggestions = new Set();
+                if (data.response) {
+                    addMessageToChat(data.response, 'bot');
+                }
+                if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+                    addSuggestions(data.suggestions);
+                }
+            } catch (e) {
+                addMessageToChat('Could not restart the conversation. Please try again.', 'bot');
             }
         }
 
