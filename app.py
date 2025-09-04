@@ -132,7 +132,7 @@ def init_db():
         ('whatsapp_phone_number', ''),
         ('whatsapp_phone_number_id', ''),
         ('webhook_verify_token', ''),
-        ('greeting_message', 'Hello! Welcome to our WhatsApp Business. How can I help you today?'),
+        ('greeting_message', 'Dear Esteemed Guest, Welcome to Souq Waqif Boutique Hotels by Tivoli. I am your Virtual Butler and remain at your service. Please select from the options below for your convenience.'),
         ('smtp_server', 'smtp.gmail.com'),
         ('smtp_port', '587'),
         ('smtp_username', ''),
@@ -722,7 +722,8 @@ def find_response(query):
     conn.close()
     if row:
         return row[0]
-    return 'Sorry, I don\'t have an answer for that. Please contact support.'
+    # Fallback to configured greeting message as the default assistant response
+    return get_setting('greeting_message', 'Dear Esteemed Guest, Welcome to Souq Waqif Boutique Hotels by Tivoli. I am your Virtual Butler and remain at your service. Please select from the options below for your convenience.')
 
 # Helper: keep responses concise for UI
 def _truncate_response(text, limit=600):
