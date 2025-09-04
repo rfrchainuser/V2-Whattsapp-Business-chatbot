@@ -12,16 +12,22 @@ app.use(bodyParser.json());
 // Configuration: Greeting message and moderation keywords
 const GREETING_MESSAGE = process.env.GREETING_MESSAGE || 'Dear Esteemed Guest, Welcome to Souq Waqif Boutique Hotels by Tivoli. I am your Virtual Butler and remain at your service. Please select from the options below for your convenience.';
 const MODERATION_WARNING = 'Your message contains blocked content. Please rephrase.';
-const badWords = [
-    'badword1',
-    'badword2'
-    // Add more prohibited words/phrases as needed
+// Moderation patterns: dangerous, sexual, and cursing (word-boundary regex)
+const moderationPatterns = [
+    // Cursing / profanity
+    /\b(fuck|shit|bitch|asshole|bastard|dick|pussy|motherfucker|mf|cunt|slut|whore|prick)\b/i,
+    // Sexual content
+    /\b(sex|sexual|porn|pornography|nude|nudity|blowjob|handjob|anal|fetish|erotic|xxx)\b/i,
+    // Dangerous / violent / illegal
+    /\b(bomb|kill|murder|suicide|terror(ist|ism)?|attack|shoot(ing)?|gun|weapon|drugs?|heroin|cocaine|meth|hack(ing|er)?|breach)\b/i,
+    // Hate / slurs (basic sample, expand as needed)
+    /\b(racist|hate\s*speech|lynch)\b/i,
 ];
 
 function isModerated(text) {
     if (!text) return false;
-    const lower = String(text).toLowerCase();
-    return badWords.some(w => lower.includes(w.toLowerCase()));
+    const s = String(text);
+    return moderationPatterns.some((rx) => rx.test(s));
 }
 
 // Webhook verification
