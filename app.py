@@ -132,9 +132,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-@app.before_first_request
-def _initialize_database():
-    init_db()
+# Initialize database at import time (Flask 3.x safe; idempotent)
+init_db()
 
 # Helper to fetch a setting value by key
 def get_setting(key, default=None):
