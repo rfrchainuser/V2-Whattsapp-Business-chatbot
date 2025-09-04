@@ -591,12 +591,28 @@ def save_to_knowledge(data):
 def export_faqs():
     if not PANDAS_AVAILABLE or not OPENPYXL_AVAILABLE:
         return jsonify({'error': 'Excel export requires pandas and openpyxl installed.'}), 400
+    # Select only needed fields and compute a Type column
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query('SELECT * FROM faqs', conn)
+    df = pd.read_sql_query('SELECT id, question, answer, parent_id FROM faqs ORDER BY id ASC', conn)
     conn.close()
+    # Add Type column: Main FAQ when parent_id is NULL, else Sub-FAQ
+    def _type_from_parent(pid):
+        try:
+            return 'Main FAQ' if pd.isna(pid) or pid is None else 'Sub-FAQ'
+        except Exception:
+            return 'Main FAQ'
+    if not df.empty:
+        df['Type'] = df['parent_id'].apply(_type_from_parent)
+        # Reorder columns for clarity
+        df = df[['id', 'question', 'answer', 'Type', 'parent_id']]
+        # Rename parent_id to Parent ID for friendlier Excel header
+        df = df.rename(columns={'parent_id': 'Parent ID', 'id': 'ID', 'question': 'Question', 'answer': 'Answer'})
+    else:
+        # Create an empty template with proper headers
+        df = pd.DataFrame(columns=['ID', 'Question', 'Answer', 'Type', 'Parent ID'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
+        df.to_excel(writer, index=False, sheet_name='FAQs')
     output.seek(0)
     return send_file(output, as_attachment=True, download_name='faqs.xlsx')
 
@@ -614,30 +630,66 @@ def import_faqs():
         df = pd.read_excel(file)
     except Exception as e:
         return jsonify({'error': f'Failed to read Excel file: {str(e)}'}), 400
+    # Normalize column names to ease matching
+    normalized_cols = {c: c for c in df.columns}
+    rename_map = {}
+    for c in df.columns:
+        cl = str(c).strip().lower()
+        if cl == 'question':
+            rename_map[c] = 'question'
+        elif cl == 'answer':
+            rename_map[c] = 'answer'
+        elif cl in ('parent id', 'parent_id'):
+            rename_map[c] = 'parent_id'
+        elif cl == 'type':
+            rename_map[c] = 'Type'
+    if rename_map:
+        df = df.rename(columns=rename_map)
     # Validate required columns
     required = {'question', 'answer'}
     missing = [c for c in required if c not in df.columns]
     if missing:
         return jsonify({'error': f"Missing required columns: {', '.join(missing)}"}), 400
-    # Optional parent_id
+    # Optional columns: parent_id and Type
     has_parent = 'parent_id' in df.columns
+    has_type = 'Type' in df.columns
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         for _, row in df.iterrows():
-            q = row['question']
-            a = row['answer']
+            q = str(row['question']).strip() if not pd.isna(row['question']) else ''
+            a = str(row['answer']).strip() if not pd.isna(row['answer']) else ''
             pid = None
+            # Determine parent_id based on Type and/or parent_id field
+            tval = None
+            if has_type:
+                tv = row['Type']
+                tval = ('' if pd.isna(tv) else str(tv)).strip().lower()
             if has_parent:
                 val = row['parent_id']
+            else:
+                val = None
+            # Priority: if Type indicates Main FAQ, force pid=None
+            if tval in ('main faq', 'main', 'root', 'top', 'top-level'):
+                pid = None
+            elif tval in ('sub-faq', 'sub', 'child'):
+                # For Sub-FAQ, require a valid parent_id
                 try:
-                    # Treat NaN/None/empty as NULL
-                    if pd.isna(val) or val == '':
-                        pid = None
-                    else:
-                        pid = int(val)
+                    if pd.isna(val) or str(val).strip() == '':
+                        return jsonify({'error': f'Missing Parent ID for Sub-FAQ: "{q}"'}), 400
+                    pid = int(str(val).strip())
                 except Exception:
-                    return jsonify({'error': f'Invalid parent_id value: {val}'}), 400
+                    return jsonify({'error': f'Invalid Parent ID value for "{q}": {val}'}), 400
+            else:
+                # If Type is not provided, fall back to parent_id if present
+                if has_parent:
+                    try:
+                        if pd.isna(val) or str(val).strip() == '':
+                            pid = None
+                        else:
+                            pid = int(str(val).strip())
+                    except Exception:
+                        return jsonify({'error': f'Invalid parent_id value: {val}'}), 400
             cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (q, a, pid))
         conn.commit()
     except Exception as e:
@@ -651,4 +703,4 @@ def import_faqs():
             conn.close()
         except Exception:
             pass
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'message': 'FAQs imported successfully.'})
