@@ -473,6 +473,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadSettings();
             loadFAQs();
+            initChat();
         });
         
         function logout() {
@@ -813,6 +814,30 @@
         }
 
         // Chat simulation functions
+        async function initChat() {
+            // Fetch greeting and initial suggestions from backend
+            try {
+                const resp = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: '' })
+                });
+                const data = await resp.json();
+                // Replace the initial welcome message text
+                const chatArea = document.getElementById('chat-area');
+                const firstMsg = chatArea.querySelector('.message.bot-message');
+                if (firstMsg && typeof data.response === 'string') {
+                    firstMsg.innerHTML = formatMessageContent(data.response);
+                }
+                // Render suggestions if any
+                if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+                    addSuggestions(data.suggestions);
+                }
+            } catch (e) {
+                // Ignore init errors silently to not block UI
+                console.warn('Init chat failed:', e);
+            }
+        }
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
