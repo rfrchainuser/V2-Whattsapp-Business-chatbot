@@ -375,8 +375,10 @@
                     <label style="margin-left:10px;">Max pages</label>
                     <input type="number" id="train-max-pages" value="50" min="1" max="200" style="width:90px;">
                 </div>
-                <button class="btn" onclick="trainFromUrl()">Train from URL</button>
-                <button class="btn btn-danger" onclick="clearTraining()">Clear Training</button>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <button class="btn" style="padding:6px 10px; font-size:12px; line-height:1;" onclick="trainFromUrl()">Train from URL</button>
+                    <button class="btn btn-danger" style="padding:6px 10px; font-size:12px; line-height:1;" onclick="clearTraining()">Clear Training</button>
+                </div>
                 <div id="train-result" style="margin-top:10px; color:#333; font-size: 13px;"></div>
                 <div id="train-progress" class="progress" style="display:none;">
                     <div id="train-progress-bar" class="progress-bar"></div>
