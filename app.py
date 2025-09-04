@@ -19,6 +19,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from werkzeug.exceptions import RequestEntityTooLarge, HTTPException
+import logging
 
 # Optional dependencies for Excel import/export
 try:
@@ -40,6 +41,9 @@ app.config['DEBUG'] = False
 app.config['TESTING'] = False
 # Limit upload size to avoid upstream/proxy HTML errors on oversized files
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
+
+# Basic logging
+logging.basicConfig(level=logging.INFO)
 
 # Configurable database path (for Railway volume persistence). For production, consider migrating to PostgreSQL.
 DB_PATH = os.environ.get('DATABASE_PATH', 'whatsapp_business.db')
@@ -333,6 +337,26 @@ def handle_http_exception(e):
     if api_like:
         return jsonify({'error': e.description, 'code': e.code}), e.code
     return e
+
+# Catch-all JSON for unhandled exceptions on API routes
+@app.errorhandler(Exception)
+def handle_unexpected_exception(e):
+    api_like = (
+        request.path.startswith('/import_faqs') or
+        request.path.startswith('/export_faqs') or
+        request.path.startswith('/webhook') or
+        request.path.startswith('/train') or
+        request.path.startswith('/settings') or
+        request.path.startswith('/add_faq') or
+        request.path.startswith('/update_faq') or
+        request.path.startswith('/delete_faq') or
+        request.path.startswith('/faqs')
+    )
+    if api_like:
+        app.logger.exception('Unhandled exception processing API request')
+        return jsonify({'error': 'Internal server error'}), 500
+    # Fallback generic
+    return ('Internal Server Error', 500)
 
 @app.route('/delete_faq/<int:faq_id>', methods=['DELETE'])
 @login_required
