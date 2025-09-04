@@ -669,27 +669,43 @@ def import_faqs():
                 val = row['parent_id']
             else:
                 val = None
+            # Helper to parse Parent ID flexibly (int, float like 1.0, or numeric string)
+            def _parse_parent_id(v):
+                try:
+                    if v is None:
+                        return None
+                    # Pandas may give NaN as float
+                    if isinstance(v, float) and pd.isna(v):
+                        return None
+                    if isinstance(v, (int,)):
+                        return int(v)
+                    if isinstance(v, float):
+                        return int(v)
+                    s = str(v).strip()
+                    if s == '':
+                        return None
+                    # Accept strings like '1' or '1.0'
+                    return int(float(s))
+                except Exception:
+                    raise
             # Priority: if Type indicates Main FAQ, force pid=None
             if tval in ('main faq', 'main', 'root', 'top', 'top-level'):
                 pid = None
             elif tval in ('sub-faq', 'sub', 'child'):
                 # For Sub-FAQ, require a valid parent_id
                 try:
-                    if pd.isna(val) or str(val).strip() == '':
+                    pid = _parse_parent_id(val)
+                    if pid is None:
                         return jsonify({'error': f'Missing Parent ID for Sub-FAQ: "{q}"'}), 400
-                    pid = int(str(val).strip())
                 except Exception:
                     return jsonify({'error': f'Invalid Parent ID value for "{q}": {val}'}), 400
             else:
                 # If Type is not provided, fall back to parent_id if present
                 if has_parent:
                     try:
-                        if pd.isna(val) or str(val).strip() == '':
-                            pid = None
-                        else:
-                            pid = int(str(val).strip())
+                        pid = _parse_parent_id(val)
                     except Exception:
-                        return jsonify({'error': f'Invalid parent_id value: {val}'}), 400
+                        return jsonify({'error': f'Invalid Parent ID value: {val}'}), 400
             cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (q, a, pid))
         conn.commit()
     except Exception as e:
