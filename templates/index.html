@@ -506,7 +506,7 @@
             const buttons = section.querySelectorAll('button');
             const inputs = section.querySelectorAll('input');
 
-            if (!confirm('This will delete the trained knowledge for the current domain. Continue?')) return;
+            if (!confirm('This will DELETE ALL trained knowledge across ALL domains. Continue?')) return;
 
             // Disable controls
             buttons.forEach(b => b.disabled = true);
@@ -518,12 +518,12 @@
                 const resp = await fetch('/api/clear-training', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reset_current: true })
+                    body: JSON.stringify({ all: true, reset_current: true })
                 });
                 const data = await resp.json();
                 if (data.success) {
                     result.style.color = '#2e7d32';
-                    result.textContent = `Cleared ${data.deleted || 0} items` + (data.domain ? ` for domain ${data.domain}` : '');
+                    result.textContent = `Cleared ${data.deleted || 0} items from all domains`;
                 } else {
                     result.style.color = '#c62828';
                     result.textContent = 'Failed to clear training: ' + (data.error || 'Unknown error');
