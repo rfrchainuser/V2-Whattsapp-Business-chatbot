@@ -154,6 +154,8 @@
             margin-bottom: 10px;
             white-space: pre-line;
             line-height: 1.5;
+            overflow-wrap: anywhere; /* allow breaking long email/urls */
+            word-break: break-word;
         }
         
         .faq-actions {
@@ -213,6 +215,8 @@
             max-width: 80%;
             white-space: pre-line;
             line-height: 1.5;
+            overflow-wrap: anywhere; /* robust wrapping */
+            word-break: break-word;
         }
         
         .user-message {
@@ -966,11 +970,25 @@
                 .replace(/\n/g, '<br>')
                 // Handle "call us at:" followed by phone numbers
                 .replace(/(call us at:)\s*(\+\d)/gi, '$1<br>$2');
-            
+
+            // Linkify email addresses first to avoid URL parser interfering
+            formatted = formatEmails(formatted);
             // Handle long URLs - make them clickable and shortened
             formatted = formatLinks(formatted);
             
             return formatted;
+        }
+
+        function formatEmails(text) {
+            // Basic email regex (simple and practical)
+            const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/g;
+            return text.replace(emailRegex, function(email) {
+                // Avoid double-linking if already inside an anchor tag
+                if (/<a [^>]*>[^<]*$/.test(text)) {
+                    return email;
+                }
+                return `<a href="mailto:${email}" style="color: #25D366; text-decoration: underline; word-break: break-all;">${email}</a>`;
+            });
         }
         
         function formatLinks(text) {
