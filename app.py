@@ -109,6 +109,11 @@ def init_db():
         cols = [row[1] for row in cursor.fetchall()]
         if 'images' not in cols:
             cursor.execute("ALTER TABLE knowledge ADD COLUMN images TEXT")
+        # Migration: add 'domain' column to scope knowledge to a company/site
+        cursor.execute("PRAGMA table_info(knowledge)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'domain' not in cols:
+            cursor.execute("ALTER TABLE knowledge ADD COLUMN domain TEXT")
     except Exception:
         pass
     # Insert default settings
@@ -362,6 +367,22 @@ def api_train_url():
     visited = set()
     queue = [url]
     domain = parsed.netloc
+    # Persist current domain for scoping answers
+    try:
+        update_setting('current_domain', domain)
+    except Exception:
+        pass
+    # Purge old trainings not related to current company/domain
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        # Prefer domain column; also clean legacy entries with NULL domain
+        cursor.execute('DELETE FROM knowledge WHERE domain IS NULL OR domain != ?', (domain,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        # Non-fatal; continue training
+        pass
     try:
         while queue and crawled < max_pages:
             current = queue.pop(0)
@@ -626,8 +647,16 @@ def find_response(query):
     if row:
         conn.close()
         return row[0]
-    # Search knowledge base
-    cursor.execute('SELECT content FROM knowledge WHERE content LIKE ? LIMIT 1', (f'%{query}%',))
+    # Search knowledge base scoped to current domain and most recent
+    current_domain = get_setting('current_domain', None)
+    if current_domain:
+        cursor.execute('SELECT content FROM knowledge WHERE domain = ? AND content LIKE ? ORDER BY created_at DESC LIMIT 1', (current_domain, f'%{query}%'))
+        row = cursor.fetchone()
+        if row:
+            conn.close()
+            return row[0]
+    # Fallback: legacy entries without domain (least preferred)
+    cursor.execute('SELECT content FROM knowledge WHERE domain IS NULL AND content LIKE ? ORDER BY created_at DESC LIMIT 1', (f'%{query}%',))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -706,8 +735,17 @@ def crawl_url(url):
 def save_to_knowledge(data):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO knowledge (url, title, content, images) VALUES (?, ?, ?, ?)',
-                   (data['url'], data['title'], data['content'], data['images']))
+    try:
+        dom = urlparse(data['url']).netloc
+    except Exception:
+        dom = None
+    # Insert with domain if column exists; fallback to legacy insert
+    try:
+        cursor.execute('INSERT INTO knowledge (url, title, content, images, domain) VALUES (?, ?, ?, ?, ?)',
+                       (data['url'], data['title'], data['content'], data['images'], dom))
+    except Exception:
+        cursor.execute('INSERT INTO knowledge (url, title, content, images) VALUES (?, ?, ?, ?)',
+                       (data['url'], data['title'], data['content'], data['images']))
     conn.commit()
     conn.close()
 
