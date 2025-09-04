@@ -240,16 +240,30 @@
             gap: 6px;
             margin-top: 10px;
         }
+        @media (max-width: 380px) {
+            .suggestions { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 300px) {
+            .suggestions { grid-template-columns: 1fr; }
+        }
         
         .suggestion-btn {
             background: #25D366;
             color: white;
             border: none;
-            padding: 6px;
+            padding: 6px 8px;
             border-radius: 5px;
             font-size: 11px;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-height: 36px; /* mobile-friendly tap target */
+            line-height: 1.2;
+            display: -webkit-box;
+            line-clamp: 2; /* standard property for compatibility */
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .suggestion-btn.used {
@@ -1090,7 +1104,8 @@
             const suggestionsDiv = document.createElement('div');
             suggestionsDiv.className = 'suggestions';
             
-            suggestions.forEach(suggestion => {
+            const list = Array.isArray(suggestions) ? suggestions.slice(0, 9) : [];
+            list.forEach(suggestion => {
                 const btn = document.createElement('button');
                 btn.className = usedSuggestions.has(suggestion.id) ? 'suggestion-btn used' : 'suggestion-btn';
                 btn.textContent = suggestion.question;
