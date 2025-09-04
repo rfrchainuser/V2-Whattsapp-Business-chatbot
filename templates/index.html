@@ -376,6 +376,7 @@
                     <input type="number" id="train-max-pages" value="50" min="1" max="200" style="width:90px;">
                 </div>
                 <button class="btn" onclick="trainFromUrl()">Train from URL</button>
+                <button class="btn btn-danger" onclick="clearTraining()">Clear Training</button>
                 <div id="train-result" style="margin-top:10px; color:#333; font-size: 13px;"></div>
                 <div id="train-progress" class="progress" style="display:none;">
                     <div id="train-progress-bar" class="progress-bar"></div>
@@ -491,6 +492,46 @@
                 document.getElementById('greeting-message').value = settings.greeting_message || '';
             } catch (error) {
                 console.error('Error loading settings:', error);
+            }
+        }
+
+        // Clear training data for current domain
+        window.clearTraining = async function() {
+            const result = document.getElementById('train-result');
+            const progress = document.getElementById('train-progress');
+            const bar = document.getElementById('train-progress-bar');
+            const section = result.closest('.settings-section');
+            const buttons = section.querySelectorAll('button');
+            const inputs = section.querySelectorAll('input');
+
+            if (!confirm('This will delete the trained knowledge for the current domain. Continue?')) return;
+
+            // Disable controls
+            buttons.forEach(b => b.disabled = true);
+            inputs.forEach(i => i.disabled = true);
+            result.style.color = '#333';
+            result.textContent = 'Clearing training data...';
+
+            try {
+                const resp = await fetch('/api/clear-training', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reset_current: true })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    result.style.color = '#2e7d32';
+                    result.textContent = `Cleared ${data.deleted || 0} items` + (data.domain ? ` for domain ${data.domain}` : '');
+                } else {
+                    result.style.color = '#c62828';
+                    result.textContent = 'Failed to clear training: ' + (data.error || 'Unknown error');
+                }
+            } catch (e) {
+                result.style.color = '#c62828';
+                result.textContent = 'Error: ' + e.message;
+            } finally {
+                buttons.forEach(b => b.disabled = false);
+                inputs.forEach(i => i.disabled = false);
             }
         }
         
