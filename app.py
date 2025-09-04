@@ -116,6 +116,15 @@ def init_db():
             cursor.execute("ALTER TABLE knowledge ADD COLUMN domain TEXT")
     except Exception:
         pass
+    # Create contacts table to track WhatsApp user greeting state
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT UNIQUE NOT NULL,
+            welcomed BOOLEAN DEFAULT FALSE,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     # Insert default settings
     cursor.execute('''
         INSERT OR IGNORE INTO settings (key, value) VALUES
@@ -486,6 +495,12 @@ def api_import_faqs():
 def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
+    # Content moderation for chat UI as well
+    if message and is_moderated(message):
+        warn = 'Your message contains blocked content. Please rephrase.'
+        # Provide suggestions anyway
+        suggestions = get_main_faq_suggestions(limit=6)
+        return jsonify({'response': warn, 'suggestions': suggestions})
     # First-time behavior: greet only on the first NON-empty user message.
     if not session.get('welcomed_user', False):
         if message:
@@ -624,18 +639,58 @@ def webhook():
         return 'Verification failed', 403
     elif request.method == 'POST':
         data = request.json
-        # Process incoming message
-        if 'messages' in data['entry'][0]['changes'][0]['value']:
-            message = data['entry'][0]['changes'][0]['value']['messages'][0]
-            sender = message['from']
-            text = message['text']['body'] if 'text' in message else ''
-            # Moderate content
-            if is_moderated(text):
-                # Handle moderated content (e.g., log or ignore)
+        # Defensive checks for structure
+        try:
+            changes = data.get('entry', [])[0].get('changes', [])[0].get('value', {})
+            msgs = changes.get('messages', [])
+        except Exception:
+            msgs = []
+        if msgs:
+            message = msgs[0]
+            sender = message.get('from')
+            text = message.get('text', {}).get('body', '') if isinstance(message.get('text'), dict) else ''
+            # Moderate content: reply with warning and do not process further
+            if text and is_moderated(text):
+                send_whatsapp_message(sender, 'Your message contains blocked content. Please rephrase.')
                 return 'Moderated', 200
-            # Find matching FAQ or knowledge
-            response = find_response(text)
-            send_whatsapp_message(sender, response)
+            # Greeting logic per WhatsApp sender
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute('SELECT welcomed FROM contacts WHERE phone = ?', (sender,))
+                row = cursor.fetchone()
+                if not row:
+                    cursor.execute('INSERT INTO contacts (phone, welcomed, last_seen) VALUES (?, ?, ?)', (sender, False, datetime.now()))
+                    conn.commit()
+                    welcomed = False
+                else:
+                    welcomed = bool(row[0])
+                # Update last seen
+                cursor.execute('UPDATE contacts SET last_seen = ? WHERE phone = ?', (datetime.now(), sender))
+                conn.commit()
+            except Exception:
+                welcomed = True  # fail open to avoid greeting loop
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            if text and not welcomed:
+                greet = get_setting('greeting_message', 'Hello!')
+                send_whatsapp_message(sender, greet)
+                # Mark welcomed
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE contacts SET welcomed = TRUE WHERE phone = ?', (sender,))
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+            else:
+                # Find matching FAQ or knowledge
+                response = find_response(text)
+                send_whatsapp_message(sender, response)
         return 'OK', 200
 
 def find_response(query):
@@ -650,13 +705,19 @@ def find_response(query):
     # Search knowledge base scoped to current domain and most recent
     current_domain = get_setting('current_domain', None)
     if current_domain:
+        # Try title match first, then content; prefer most recent
+        cursor.execute('SELECT content FROM knowledge WHERE domain = ? AND title LIKE ? ORDER BY created_at DESC LIMIT 1', (current_domain, f'%{query}%'))
+        row = cursor.fetchone()
+        if row:
+            conn.close()
+            return row[0]
         cursor.execute('SELECT content FROM knowledge WHERE domain = ? AND content LIKE ? ORDER BY created_at DESC LIMIT 1', (current_domain, f'%{query}%'))
         row = cursor.fetchone()
         if row:
             conn.close()
             return row[0]
     # Fallback: legacy entries without domain (least preferred)
-    cursor.execute('SELECT content FROM knowledge WHERE domain IS NULL AND content LIKE ? ORDER BY created_at DESC LIMIT 1', (f'%{query}%',))
+    cursor.execute('SELECT content FROM knowledge WHERE domain IS NULL AND (title LIKE ? OR content LIKE ?) ORDER BY created_at DESC LIMIT 1', (f'%{query}%', f'%{query}%'))
     row = cursor.fetchone()
     conn.close()
     if row:
