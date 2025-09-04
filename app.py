@@ -176,11 +176,28 @@ def update_setting(key, value):
 
 # Basic content moderation function (simple keyword filter; expand with NLP if needed)
 def is_moderated(content):
-    bad_keywords = ['badword1', 'badword2']  # Add your list of prohibited words/phrases
-    for word in bad_keywords:
-        if word.lower() in content.lower():
-            return True
-    return False
+    # Comprehensive moderation list: dangerous, sexual, and cursing
+    if not content:
+        return False
+    text = str(content).lower()
+    patterns = [
+        # Cursing / profanity
+        r"\b(fuck|shit|bitch|asshole|bastard|dick|pussy|motherfucker|mf|cunt|slut|whore|prick)\b",
+        # Sexual content
+        r"\b(sex|sexual|porn|pornography|nude|nudity|blowjob|handjob|anal|fetish|erotic|xxx)\b",
+        # Dangerous / violent / illegal
+        r"\b(bomb|kill|murder|suicide|terror(ist|ism)?|attack|shoot(ing)?|gun|weapon|drugs?|heroin|cocaine|meth|hack(ing|er)?|breach)\b",
+        # Hate / slurs (basic sample, expand as needed)
+        r"\b(racist|hate\s*speech|lynch)\b",
+    ]
+    try:
+        for pat in patterns:
+            if re.search(pat, text, flags=re.IGNORECASE):
+                return True
+        return False
+    except Exception:
+        # Fail-safe: if regex fails, do not moderate
+        return False
 
 # Login required decorator
 def login_required(f):
@@ -805,8 +822,13 @@ def train():
 
 def crawl_url(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
         if response.status_code != 200:
+            return None
+        # Skip non-HTML content quickly using Content-Type or URL extension
+        ctype = response.headers.get('Content-Type', '')
+        path = urlparse(url).path.lower()
+        if ('html' not in ctype.lower()) or re.search(r'\.(css|js|json|xml|txt|ico|woff2?|ttf|eot|otf|map)($|\?)', path):
             return None
         # Simple HTML parsing (use BeautifulSoup for better if installed, but avoid extra deps)
         content = re.sub('<[^<]+?>', '', response.text)  # Strip tags
@@ -827,6 +849,18 @@ def save_to_knowledge(data):
         dom = urlparse(data['url']).netloc
     except Exception:
         dom = None
+    # Heuristics: skip saving CSS/JS or obviously non-informative blobs
+    try:
+        p = urlparse(data.get('url', '')).path.lower()
+        content_snippet = (data.get('content') or '')[:2000]
+        if re.search(r'\.(css|js|json|xml|txt|ico|woff2?|ttf|eot|otf|map)($|\?)', p):
+            conn.close()
+            return
+        if ('@font-face' in content_snippet) or ('@charset' in content_snippet) or content_snippet.strip().startswith('/*'):
+            conn.close()
+            return
+    except Exception:
+        pass
     # Insert with domain if column exists; fallback to legacy insert
     try:
         cursor.execute('INSERT INTO knowledge (url, title, content, images, domain) VALUES (?, ?, ?, ?, ?)',
@@ -836,6 +870,38 @@ def save_to_knowledge(data):
                        (data['url'], data['title'], data['content'], data['images']))
     conn.commit()
     conn.close()
+
+@app.route('/api/knowledge-delete', methods=['POST'])
+@login_required
+def api_knowledge_delete():
+    try:
+        payload = request.get_json(silent=True) or {}
+        pattern = (payload.get('pattern') or '').strip()
+        field = (payload.get('field') or 'content').strip().lower()  # one of: content, title, url
+        domain_only = payload.get('domain_only', True)
+        if field not in ('content', 'title', 'url'):
+            return jsonify({'success': False, 'error': 'Invalid field. Use content, title, or url.'}), 400
+        if not pattern:
+            return jsonify({'success': False, 'error': 'Missing pattern'}), 400
+        # Build query
+        column = field
+        params = []
+        where = f"{column} LIKE ?"
+        params.append(f"%{pattern}%")
+        if domain_only:
+            current = get_setting('current_domain', None)
+            if current:
+                where += ' AND domain = ?'
+                params.append(current)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(f'DELETE FROM knowledge WHERE {where}', tuple(params))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'deleted': deleted})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/export_faqs', methods=['GET'])
 @login_required
