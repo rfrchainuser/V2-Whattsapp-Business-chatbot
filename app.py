@@ -358,6 +358,7 @@ def api_train_url():
 
     crawled = 0
     saved = 0
+    last_error = None
     visited = set()
     queue = [url]
     domain = parsed.netloc
@@ -367,31 +368,57 @@ def api_train_url():
             if current in visited:
                 continue
             visited.add(current)
-            data = crawl_url(current)
+            data = None
+            try:
+                data = crawl_url(current)
+            except Exception as e:
+                last_error = f'crawl_url failed for {current}: {e}'
+                data = None
             crawled += 1
             if data:
                 try:
                     save_to_knowledge(data)
                     saved += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    last_error = f'save_to_knowledge failed for {current}: {e}'
             # Enqueue links for deep crawl
             if deep:
                 try:
-                    resp = requests.get(current, timeout=10)
+                    resp = requests.get(current, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
                     if resp.status_code == 200:
+                        # Only consider HTML content
+                        ctype = resp.headers.get('Content-Type', '')
+                        if 'html' not in ctype.lower():
+                            continue
                         links = re.findall(r'href=["\'](.*?)["\']', resp.text)
                         for link in links:
                             try:
                                 absolute = urljoin(current, link)
                                 p = urlparse(absolute)
-                                if p.scheme in ('http', 'https') and p.netloc == domain:
-                                    if absolute not in visited and absolute not in queue:
-                                        queue.append(absolute)
-                            except Exception:
+                                # Skip non-http(s), fragments, mailto, javascript
+                                if p.scheme not in ('http', 'https'):
+                                    continue
+                                if absolute.startswith('mailto:') or absolute.startswith('javascript:'):
+                                    continue
+                                if p.netloc != domain:
+                                    continue
+                                # Avoid binary/document files
+                                if re.search(r'\.(pdf|jpg|jpeg|png|gif|svg|zip|rar|7z|mp3|mp4|avi|mov|wmv|xlsx?|docx?|pptx?)($|\?)', p.path, re.I):
+                                    continue
+                                if absolute not in visited and absolute not in queue:
+                                    queue.append(absolute)
+                            except Exception as e:
+                                last_error = f'link parse failed for {link} on {current}: {e}'
                                 continue
-                except Exception:
+                except Exception as e:
+                    last_error = f'link fetch failed for {current}: {e}'
                     pass
+        # If nothing saved, report a helpful failure so UI won't show Unknown error
+        if saved == 0:
+            msg = 'No pages could be saved. The site may block bots, contain no parsable HTML, or be outside allowed domain.'
+            if last_error:
+                msg += f' Last error: {last_error}'
+            return jsonify({'success': False, 'error': msg, 'pages_crawled': crawled, 'pages_saved': saved}), 200
         return jsonify({'success': True, 'message': 'Training completed', 'pages_crawled': crawled, 'pages_saved': saved})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
