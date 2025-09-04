@@ -513,12 +513,16 @@ def api_import_faqs():
 def api_clear_training():
     try:
         data = request.get_json(silent=True) or {}
+        # If all is true, delete everything regardless of domain
+        delete_all = bool(data.get('all', False))
         domain = (data.get('domain') or '').strip()
-        if not domain:
+        if not domain and not delete_all:
             domain = get_setting('current_domain', None)
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        if domain:
+        if delete_all:
+            cursor.execute('DELETE FROM knowledge')
+        elif domain:
             cursor.execute('DELETE FROM knowledge WHERE domain = ?', (domain,))
         else:
             # If no domain is set, clear legacy entries with NULL domain
@@ -527,9 +531,9 @@ def api_clear_training():
         conn.commit()
         conn.close()
         # Optionally reset current_domain if we cleared it
-        if domain and (data.get('reset_current', True)):
+        if (delete_all or domain) and (data.get('reset_current', True)):
             update_setting('current_domain', '')
-        return jsonify({'success': True, 'deleted': deleted, 'domain': domain or None})
+        return jsonify({'success': True, 'deleted': deleted, 'domain': None if delete_all else (domain or None), 'all': delete_all})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
