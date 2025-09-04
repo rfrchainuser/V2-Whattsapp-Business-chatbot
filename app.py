@@ -199,6 +199,15 @@ def is_moderated(content):
         # Fail-safe: if regex fails, do not moderate
         return False
 
+# Detect intent to escalate to human staff when user mentions 'additional inquiries'
+def is_additional_inquiries(content: str) -> bool:
+    try:
+        if not content:
+            return False
+        return re.search(r"\badditional\s+inquir", str(content), re.IGNORECASE) is not None
+    except Exception:
+        return False
+
 # Login required decorator
 def login_required(f):
     @wraps(f)
@@ -579,6 +588,13 @@ def api_chat():
         # Provide suggestions anyway
         suggestions = get_main_faq_suggestions(limit=9)
         return jsonify({'response': warn, 'suggestions': suggestions})
+    # Human handoff: do not auto-reply if user is asking for additional inquiries
+    if message and is_additional_inquiries(message):
+        # Frontend will respect no_reply flag and not render a bot message
+        return jsonify({'response': '', 'suggestions': [], 'no_reply': True})
+    # If a previous selection triggered handoff, do not auto-reply to subsequent messages
+    if session.get('handoff', False) and message:
+        return jsonify({'response': '', 'suggestions': [], 'no_reply': True})
     # First-time behavior: greet only on the first NON-empty user message.
     if not session.get('welcomed_user', False):
         if message:
@@ -609,6 +625,13 @@ def api_faq_answer(faq_id):
     cursor.execute('SELECT id, question, answer FROM faqs WHERE parent_id = ?', (faq_id,))
     subs = cursor.fetchall()
     conn.close()
+    # If this FAQ represents Additional Inquiries, enable handoff in session
+    try:
+        qtext = (row[1] or '').strip()
+        if re.search(r"\badditional\s+inquir", qtext, re.IGNORECASE):
+            session['handoff'] = True
+    except Exception:
+        pass
     return jsonify({
         'id': row[0],
         'question': row[1],
@@ -731,6 +754,9 @@ def webhook():
             if text and is_moderated(text):
                 send_whatsapp_message(sender, "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment.")
                 return 'Moderated', 200
+            # Human handoff: if guest mentions additional inquiries, do not auto-reply; leave for staff
+            if text and is_additional_inquiries(text):
+                return 'Handoff to human', 200
             # Greeting logic per WhatsApp sender
             try:
                 conn = sqlite3.connect(DB_PATH)
