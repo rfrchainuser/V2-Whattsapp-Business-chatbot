@@ -18,6 +18,7 @@ from html import unescape
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
+from werkzeug.exceptions import RequestEntityTooLarge, HTTPException
 
 # Optional dependencies for Excel import/export
 try:
@@ -37,6 +38,8 @@ app.secret_key = os.environ.get('SECRET_KEY', 'whatsapp_business_secret_key_2024
 app.config['ENV'] = 'production'
 app.config['DEBUG'] = False
 app.config['TESTING'] = False
+# Limit upload size to avoid upstream/proxy HTML errors on oversized files
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
 
 # Configurable database path (for Railway volume persistence). For production, consider migrating to PostgreSQL.
 DB_PATH = os.environ.get('DATABASE_PATH', 'whatsapp_business.db')
@@ -307,6 +310,19 @@ def update_faq(faq_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+# JSON error handlers to avoid HTML responses in API calls
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    return jsonify({'error': 'Uploaded file is too large.'}), 413
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(e):
+    # For API endpoints, prefer JSON over HTML default pages
+    api_like = request.path.startswith('/import_faqs') or request.path.startswith('/export_faqs') or request.path.startswith('/webhook')
+    if api_like:
+        return jsonify({'error': e.description, 'code': e.code}), e.code
+    return e
 
 @app.route('/delete_faq/<int:faq_id>', methods=['DELETE'])
 @login_required
