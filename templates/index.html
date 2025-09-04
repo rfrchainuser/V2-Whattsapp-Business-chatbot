@@ -86,6 +86,8 @@
             border-bottom: 2px solid #25D366;
             padding-bottom: 10px;
         }
+        .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .btn-small { padding: 6px 10px; font-size: 12px; line-height: 1; }
         
         .form-group {
             margin-bottom: 15px;
@@ -176,6 +178,8 @@
             border-radius: 5px;
             border-left: 3px solid #25D366;
         }
+        .toggle-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; margin-right: 8px; }
+        .toggle-btn:focus { outline: none; }
         
         .sub-faqs {
             margin-top: 10px;
@@ -418,7 +422,14 @@
         
         <!-- Middle Panel: FAQ Management -->
         <div class="middle-panel">
-            <div class="panel-title">❓ FAQ Management</div>
+            <div class="panel-title">
+                <div class="panel-title-row">
+                    <span>❓ FAQ Management</span>
+                    <div>
+                        <button class="btn btn-secondary btn-small" onclick="clearAllFAQs()">🧹 Clear FAQs</button>
+                    </div>
+                </div>
+            </div>
             
             <div style="margin-bottom: 20px;">
                 <button class="btn" onclick="showAddFAQModal()">➕ Add New FAQ</button>
@@ -712,19 +723,31 @@
                 `).join('');
             }
             
+            const hasSubs = Array.isArray(faq.sub_faqs) && faq.sub_faqs.length > 0;
+            const toggleBtn = hasSubs ? `<button class="toggle-btn" title="Expand/Collapse" onclick="toggleSubFaqs(${faq.id}, this)">▶</button>` : '';
             div.innerHTML = `
-                <div class="faq-question">${faq.question}</div>
+                <div class="faq-question">${toggleBtn}${faq.question}</div>
                 <div class="faq-answer">${formatMessageContent(faq.answer)}</div>
                 <div class="faq-actions">
                     <button class="btn" onclick="editFAQ(${faq.id})">✏️ Edit</button>
                     <button class="btn" onclick="addSubFAQ(${faq.id})">➕ Add Sub-FAQ</button>
                     <button class="btn btn-danger" onclick="deleteFAQ(${faq.id})">🗑️ Delete</button>
                 </div>
-                <div class="sub-faqs">
+                <div class="sub-faqs" id="subfaqs-${faq.id}" style="display: ${hasSubs ? 'none' : 'block'};">
                     ${subFaqsHtml}
                 </div>
             `;
             return div;
+        }
+
+        function toggleSubFaqs(faqId, btnEl) {
+            const container = document.getElementById(`subfaqs-${faqId}`);
+            if (!container) return;
+            const isHidden = container.style.display === 'none';
+            container.style.display = isHidden ? 'block' : 'none';
+            if (btnEl) {
+                btnEl.textContent = isHidden ? '▼' : '▶';
+            }
         }
         
         function updateParentFAQOptions() {
@@ -833,6 +856,22 @@
             window.open('/api/export-faqs', '_blank');
         }
         
+        async function clearAllFAQs() {
+            if (!confirm('This will DELETE ALL FAQs (including sub-FAQs). Continue?')) return;
+            try {
+                const resp = await fetch('/api/faqs/clear', { method: 'POST' });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(`Cleared ${data.deleted || 0} FAQs.`);
+                    loadFAQs();
+                    refreshSuggestions();
+                } else {
+                    alert('Failed to clear FAQs: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error clearing FAQs: ' + e.message);
+            }
+        }
         function importFAQs() {
             const fileInput = document.getElementById('import-file-excel');
             const file = fileInput.files[0];
