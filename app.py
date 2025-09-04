@@ -312,7 +312,12 @@ def get_faqs():
     faq_tree = {}
     for faq in faqs:
         fid, question, answer, parent_id = faq
-        if parent_id is None:
+        # Normalize parent_id: treat 0 or empty as None for compatibility
+        try:
+            parent_id_norm = None if (parent_id is None or int(parent_id) == 0) else int(parent_id)
+        except Exception:
+            parent_id_norm = None
+        if parent_id_norm is None:
             faq_tree[fid] = {
                 'id': fid,
                 'question': question,
@@ -322,19 +327,19 @@ def get_faqs():
             }
         else:
             # If parent already in tree, append as sub-FAQ; otherwise, create a placeholder parent
-            if parent_id not in faq_tree:
-                faq_tree[parent_id] = {
-                    'id': parent_id,
+            if parent_id_norm not in faq_tree:
+                faq_tree[parent_id_norm] = {
+                    'id': parent_id_norm,
                     'question': '',
                     'answer': '',
                     'parent_id': None,
                     'sub_faqs': []
                 }
-            faq_tree[parent_id]['sub_faqs'].append({
+            faq_tree[parent_id_norm]['sub_faqs'].append({
                 'id': fid,
                 'question': question,
                 'answer': answer,
-                'parent_id': parent_id
+                'parent_id': parent_id_norm
             })
     return jsonify(list(faq_tree.values()))
 
@@ -345,6 +350,16 @@ def add_faq():
     question = data['question']
     answer = data['answer']
     parent_id = data.get('parent_id')
+    # Normalize parent_id: convert empty string or invalid to None; otherwise int
+    try:
+        if parent_id in (None, '', 'null', 'None'):
+            parent_id = None
+        else:
+            parent_id = int(parent_id)
+            if parent_id == 0:
+                parent_id = None
+    except Exception:
+        parent_id = None
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)',
@@ -562,7 +577,7 @@ def api_chat():
     if message and is_moderated(message):
         warn = "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment."
         # Provide suggestions anyway
-        suggestions = get_main_faq_suggestions(limit=6)
+        suggestions = get_main_faq_suggestions(limit=9)
         return jsonify({'response': warn, 'suggestions': suggestions})
     # First-time behavior: greet only on the first NON-empty user message.
     if not session.get('welcomed_user', False):
@@ -578,7 +593,7 @@ def api_chat():
         # Avoid dumping entire web pages from knowledge base
         response_text = _truncate_response(response_text, limit=600)
     # Provide suggestions: show main FAQs for first message or always include some
-    suggestions = get_main_faq_suggestions(limit=6)
+    suggestions = get_main_faq_suggestions(limit=9)
     return jsonify({'response': response_text, 'suggestions': suggestions})
 
 @app.route('/api/faq-answer/<int:faq_id>', methods=['GET'])
@@ -797,7 +812,7 @@ def _truncate_response(text, limit=600):
         return text
 
 # Helper: fetch top-level FAQs as suggestions
-def get_main_faq_suggestions(limit=6):
+def get_main_faq_suggestions(limit=9):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
