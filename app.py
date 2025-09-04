@@ -498,6 +498,21 @@ def api_update_faq(faq_id):
 def api_delete_faq(faq_id):
     return delete_faq(faq_id)
 
+@app.route('/api/faqs/clear', methods=['POST'])
+@login_required
+def api_clear_all_faqs():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM faqs')
+        (count_before,) = cursor.fetchone()
+        cursor.execute('DELETE FROM faqs')
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'deleted': count_before})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/export-faqs', methods=['GET'])
 @login_required
 def api_export_faqs():
