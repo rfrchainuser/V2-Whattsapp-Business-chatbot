@@ -379,7 +379,9 @@ def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
     response_text = find_response(message) if message else get_setting('greeting_message', 'Hello!')
-    return jsonify({'response': response_text, 'suggestions': []})
+    # Provide suggestions: show main FAQs for first message or always include some
+    suggestions = get_main_faq_suggestions(limit=6)
+    return jsonify({'response': response_text, 'suggestions': suggestions})
 
 @app.route('/api/faq-answer/<int:faq_id>', methods=['GET'])
 @login_required
@@ -532,6 +534,22 @@ def find_response(query):
     if row:
         return row[0]
     return 'Sorry, I don\'t have an answer for that. Please contact support.'
+
+# Helper: fetch top-level FAQs as suggestions
+def get_main_faq_suggestions(limit=6):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, question FROM faqs WHERE parent_id IS NULL ORDER BY created_at DESC LIMIT ?', (limit,))
+        rows = cursor.fetchall()
+        # Fallback: if no main FAQs exist, return most recent FAQs regardless of parent
+        if not rows:
+            cursor.execute('SELECT id, question FROM faqs ORDER BY created_at DESC LIMIT ?', (limit,))
+            rows = cursor.fetchall()
+        conn.close()
+        return [{'id': r[0], 'question': r[1]} for r in rows]
+    except Exception:
+        return []
 
 def send_whatsapp_message(to, text):
     token = get_setting('whatsapp_api_token')
