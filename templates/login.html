@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Business Admin Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 400px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #25D366;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .login-btn:hover {
+            background: #128C7E;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-top: 15px;
+            padding: 10px;
+            background: #fdf2f2;
+            border-radius: 5px;
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .success {
+            color: #27ae60;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8fff8;
+            border-radius: 5px;
+            border-left: 4px solid #27ae60;
+        }
+        
+        .forgot-password-link {
+            color: #25D366;
+            text-decoration: none;
+            font-size: 14px;
+            margin-top: 15px;
+            display: inline-block;
+            cursor: pointer;
+        }
+        
+        .forgot-password-link:hover {
+            text-decoration: underline;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .modal h2 {
+            color: #25D366;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        input[type="email"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="email"]:focus {
+            outline: none;
+            border-color: #25D366;
+        }
+        
+        .reset-btn {
+            width: 100%;
+            padding: 12px;
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 15px;
+        }
+        
+        .reset-btn:hover {
+            background: #128C7E;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">📱 WhatsApp Business Admin</div>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit" class="login-btn">Login</button>
+        </form>
+        
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        {% if success %}
+            <div class="success">{{ success }}</div>
+        {% endif %}
+        
+        <a href="#" class="forgot-password-link" onclick="openForgotPasswordModal()">Forgot Password?</a>
+        
+        <div style="margin-top: 20px; color: #666; font-size: 14px;">
+            Default credentials: Admin / Admin
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeForgotPasswordModal()">&times;</span>
+            <h2>Reset Password</h2>
+            <form id="forgotPasswordForm" method="POST" action="/forgot-password">
+                <div class="form-group">
+                    <label for="email">Enter your email address:</label>
+                    <input type="email" id="email" name="email" required placeholder="admin@example.com">
+                </div>
+                <button type="submit" class="reset-btn">Send Reset Link</button>
+            </form>
+            <div style="margin-top: 15px; color: #666; font-size: 12px; text-align: center;">
+                A password reset link will be sent to your email address.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openForgotPasswordModal() {
+            document.getElementById('forgotPasswordModal').style.display = 'block';
+        }
+        
+        function closeForgotPasswordModal() {
+            document.getElementById('forgotPasswordModal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('forgotPasswordModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        // Handle forgot password form submission
+        document.getElementById('forgotPasswordForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            
+            fetch('/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'email=' + encodeURIComponent(email)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Password reset link sent to your email!');
+                    closeForgotPasswordModal();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Network error. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html>

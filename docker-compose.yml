@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  whatsapp-bot:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN}
+      - VERIFY_TOKEN=${VERIFY_TOKEN}
+      - APP_ID=${APP_ID}
+      - APP_SECRET=${APP_SECRET}
+      - PHONE_NUMBER_ID=${PHONE_NUMBER_ID}
+    env_file:
+      - .env
+    restart: unless-stopped

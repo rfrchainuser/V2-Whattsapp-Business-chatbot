@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Business Dashboard</title>
+    <link rel="icon" href="data:,">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Image grid for chat message attachments */
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; margin-top: 8px; }
+        .image-grid img { width: 100%; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #eee; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #25D366;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+        }
+
+        /* Training progress bar */
+        .progress { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; width: 100%; margin-top: 8px; border: 1px solid #e0e0e0; }
+        .progress-bar { height: 100%; width: 0%; background: #25D366; transition: width 0.25s ease; }
+        .progress-bar.error { background: #c62828; }
+        
+        .logout-btn {
+            background: #128C7E;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        
+        .left-panel {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e1e1e1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .middle-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #e1e1e1;
+        }
+        
+        .right-panel {
+            width: 350px;
+            background: #f8f9fa;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #25D366;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .btn {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            background: #128C7E;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .faq-item {
+            background: #f8f9fa;
+            border: 1px solid #e1e1e1;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .faq-question {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .faq-answer {
+            color: #666;
+            margin-bottom: 10px;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+        
+        .faq-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .faq-actions button {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        
+        .sub-faq {
+            margin-left: 20px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            border-left: 3px solid #25D366;
+        }
+        
+        .sub-faqs {
+            margin-top: 10px;
+        }
+        
+        .mobile-simulator {
+            background: #000;
+            border-radius: 25px;
+            padding: 20px;
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .mobile-header {
+            background: #25D366;
+            color: white;
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .chat-area {
+            flex: 1;
+            background: #e5ddd5;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+        
+        .user-message {
+            background: #dcf8c6;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        
+        .bot-message {
+            background: white;
+            align-self: flex-start;
+        }
+        
+        .suggestions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .suggestion-btn {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .suggestion-btn.used {
+            background: #95a5a6;
+            color: #ecf0f1;
+            opacity: 0.7;
+            position: relative;
+        }
+        
+        .suggestion-btn.used::after {
+            content: '✓';
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+        }
+        
+        .chat-input-area {
+            background: white;
+            padding: 15px;
+            border-radius: 0 0 10px 10px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+        }
+        
+        .send-btn {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .settings-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e1e1e1;
+        }
+        
+        .file-input {
+            margin-top: 10px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 500px;
+            max-width: 90%;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📱 WhatsApp Business Dashboard</h1>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+    
+    <div class="main-container">
+        <!-- Left Panel: Settings -->
+        <div class="left-panel">
+            <div class="panel-title">⚙️ Settings</div>
+            
+            <div class="settings-section">
+                <h3>WhatsApp Business Connection</h3>
+                <div class="form-group">
+                    <label>API Token:</label>
+                    <input type="text" id="api-token" placeholder="Enter WhatsApp Business API Token">
+                </div>
+                <div class="form-group">
+                    <label>Phone Number ID (Meta):</label>
+                    <input type="text" id="phone-number-id" placeholder="Enter Phone Number ID">
+                </div>
+                <div class="form-group">
+                    <label>Webhook Verify Token:</label>
+                    <input type="text" id="webhook-verify-token" placeholder="Enter Verify Token">
+                </div>
+                <button class="btn" onclick="saveSettings()">Save Connection</button>
+            </div>
+            
+            <div class="settings-section">
+                <h3>Greeting Message</h3>
+                <div class="form-group">
+                    <textarea id="greeting-message" placeholder="Enter greeting message for customers"></textarea>
+                </div>
+                <button class="btn" onclick="saveGreeting()">Save Greeting</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>Website Training</h3>
+                <div class="form-group">
+                    <label>Website URL (http/https):</label>
+                    <input type="text" id="train-url" placeholder="https://example.com">
+                </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:10px;">
+                    <label style="margin:0;">Deep crawl</label>
+                    <input type="checkbox" id="train-deep" checked>
+                    <label style="margin-left:10px;">Max pages</label>
+                    <input type="number" id="train-max-pages" value="50" min="1" max="200" style="width:90px;">
+                </div>
+                <button class="btn" onclick="trainFromUrl()">Train from URL</button>
+                <div id="train-result" style="margin-top:10px; color:#333; font-size: 13px;"></div>
+                <div id="train-progress" class="progress" style="display:none;">
+                    <div id="train-progress-bar" class="progress-bar"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>Send Test WhatsApp</h3>
+                <div class="form-group">
+                    <label>Recipient Phone (E.164, e.g., 15551234567):</label>
+                    <input type="text" id="test-to" placeholder="Enter recipient phone number">
+                </div>
+                <div class="form-group">
+                    <label>Message:</label>
+                    <input type="text" id="test-message" value="Hello from WB Dashboard!">
+                </div>
+                <button class="btn" onclick="sendTestWhatsApp()">Send Test</button>
+                <div id="test-result" style="margin-top:10px; color:#333; font-size: 13px;"></div>
+            </div>
+            
+            <div class="settings-section">
+                <h3>FAQ Management</h3>
+                <div style="margin-bottom: 15px;">
+                    <button class="btn" onclick="exportFAQs()">📊 Export Excel</button>
+                </div>
+                <div class="form-group">
+                    <label>Import FAQs (Excel only):</label>
+                    <input type="file" id="import-file-excel" accept=".xlsx,.xls" class="file-input">
+                    <button class="btn btn-secondary" onclick="importFAQs()">📊 Import Excel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Middle Panel: FAQ Management -->
+        <div class="middle-panel">
+            <div class="panel-title">❓ FAQ Management</div>
+            
+            <div style="margin-bottom: 20px;">
+                <button class="btn" onclick="showAddFAQModal()">➕ Add New FAQ</button>
+            </div>
+            
+            <div id="faq-list"></div>
+        </div>
+        
+        <!-- Right Panel: Mobile Simulation -->
+        <div class="right-panel">
+            <div class="panel-title">📱 Mobile Simulation</div>
+            
+            <div class="mobile-simulator">
+                <div class="mobile-header">WhatsApp Business Chat</div>
+                <div class="chat-area" id="chat-area">
+                    <div class="message bot-message">
+                        Welcome! Type a message to start chatting.
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" class="chat-input" id="chat-input" placeholder="Type a message..." onkeypress="handleEnter(event)">
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add/Edit FAQ Modal -->
+    <div id="faq-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeFAQModal()">&times;</span>
+            <h2 id="modal-title">Add New FAQ</h2>
+            <form id="faq-form">
+                <div class="form-group">
+                    <label>Question:</label>
+                    <input type="text" id="faq-question" required>
+                </div>
+                <div class="form-group">
+                    <label>Answer:</label>
+                    <textarea id="faq-answer" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Parent FAQ (optional):</label>
+                    <select id="parent-faq">
+                        <option value="">None (Main FAQ)</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Save FAQ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeFAQModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentEditingFAQ = null;
+        let faqs = [];
+        
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
+            loadFAQs();
+        });
+        
+        function logout() {
+            window.location.href = '/logout';
+        }
+        
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const settings = await response.json();
+                
+                document.getElementById('api-token').value = settings.whatsapp_api_token || '';
+                document.getElementById('phone-number-id').value = settings.whatsapp_phone_number_id || '';
+                document.getElementById('webhook-verify-token').value = settings.webhook_verify_token || '';
+                document.getElementById('greeting-message').value = settings.greeting_message || '';
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+        
+        async function saveSettings() {
+            const requiredFields = [
+                { id: 'api-token', name: 'API Token' },
+                { id: 'phone-number-id', name: 'Phone Number ID' },
+                { id: 'webhook-verify-token', name: 'Webhook Verify Token' }
+            ];
+
+            const missing = requiredFields.filter(f => !document.getElementById(f.id).value.trim());
+            if (missing.length > 0) {
+                alert('Please fill the required fields: ' + missing.map(m => m.name).join(', '));
+                return;
+            }
+
+            const settings = {
+                whatsapp_api_token: document.getElementById('api-token').value.trim(),
+                whatsapp_phone_number_id: document.getElementById('phone-number-id').value.trim(),
+                webhook_verify_token: document.getElementById('webhook-verify-token').value.trim()
+            };
+            
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(settings)
+                });
+                alert('Settings saved successfully!');
+            } catch (error) {
+                alert('Error saving settings: ' + error.message);
+            }
+        }
+        
+        async function saveGreeting() {
+            const greeting = {
+                greeting_message: document.getElementById('greeting-message').value
+            };
+            
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(greeting)
+                });
+                alert('Greeting message saved successfully!');
+            } catch (error) {
+                alert('Error saving greeting: ' + error.message);
+            }
+        }
+        
+        // Website training: call backend to crawl and store pages
+        window.trainFromUrl = async function() {
+            const url = document.getElementById('train-url').value.trim();
+            const deep = document.getElementById('train-deep').checked;
+            const max_pages = parseInt(document.getElementById('train-max-pages').value || '0', 10) || (deep ? 50 : 10);
+            const result = document.getElementById('train-result');
+            const progress = document.getElementById('train-progress');
+            const bar = document.getElementById('train-progress-bar');
+            const btn = progress.closest('.settings-section').querySelector('button.btn');
+
+            if (!url) {
+                alert('Please enter a website URL');
+                return;
+            }
+
+            // Init UI state
+            result.style.color = '#333';
+            result.textContent = 'Training...';
+            progress.style.display = 'block';
+            bar.classList.remove('error');
+            bar.style.width = '0%';
+            if (btn) btn.disabled = true;
+            document.getElementById('train-url').disabled = true;
+            document.getElementById('train-deep').disabled = true;
+            document.getElementById('train-max-pages').disabled = true;
+
+            // Simulated progressive fill while waiting for server (since it's a single long request)
+            let percent = 0;
+            const targetWhileLoading = 90; // stop at 90% until response
+            const tick = () => {
+                if (percent < targetWhileLoading) {
+                    // Faster early, slower later
+                    const delta = percent < 50 ? 2 : 1;
+                    percent = Math.min(targetWhileLoading, percent + delta);
+                    bar.style.width = percent + '%';
+                }
+            };
+            const interval = setInterval(tick, 250);
+
+            try {
+                const resp = await fetch('/api/train-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, deep, max_pages })
+                });
+                const data = await resp.json();
+                clearInterval(interval);
+                // Complete bar to 100%
+                percent = 100;
+                bar.style.width = '100%';
+
+                if (data.success) {
+                    result.style.color = '#2e7d32';
+                    result.textContent = data.message + (data.pages_crawled !== undefined ? ` (Crawled: ${data.pages_crawled})` : '');
+                    // Hide progress after short delay
+                    setTimeout(() => { progress.style.display = 'none'; }, 800);
+                } else {
+                    result.style.color = '#c62828';
+                    result.textContent = 'Failed: ' + (data.error || 'Unknown error');
+                    bar.classList.add('error');
+                }
+            } catch (e) {
+                clearInterval(interval);
+                percent = 100;
+                bar.style.width = '100%';
+                bar.classList.add('error');
+                result.style.color = '#c62828';
+                result.textContent = 'Error: ' + e.message;
+            } finally {
+                if (btn) btn.disabled = false;
+                document.getElementById('train-url').disabled = false;
+                document.getElementById('train-deep').disabled = false;
+                document.getElementById('train-max-pages').disabled = false;
+            }
+        }
+        
+        async function loadFAQs() {
+            try {
+                const response = await fetch('/api/faqs');
+                faqs = await response.json();
+                console.log('Loaded FAQs:', faqs); // Debug log
+                renderFAQs();
+                updateParentFAQOptions();
+            } catch (error) {
+                console.error('Error loading FAQs:', error);
+            }
+        }
+        
+        function renderFAQs() {
+            const faqList = document.getElementById('faq-list');
+            faqList.innerHTML = '';
+            
+            if (faqs.length === 0) {
+                faqList.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No FAQs found. Add some FAQs to get started!</div>';
+                return;
+            }
+            
+            faqs.forEach(faq => {
+                console.log('Rendering FAQ:', faq); // Debug log
+                const faqElement = createFAQElement(faq);
+                faqList.appendChild(faqElement);
+            });
+        }
+        
+        function createFAQElement(faq) {
+            const div = document.createElement('div');
+            div.className = 'faq-item';
+            
+            // Build sub-FAQs HTML
+            let subFaqsHtml = '';
+            if (faq.sub_faqs && faq.sub_faqs.length > 0) {
+                subFaqsHtml = faq.sub_faqs.map(subFaq => `
+                    <div class="sub-faq">
+                        <div class="faq-question">↳ ${subFaq.question}</div>
+                        <div class="faq-answer">${formatMessageContent(subFaq.answer)}</div>
+                        <div class="faq-actions">
+                            <button class="btn" onclick="editFAQ(${subFaq.id})">✏️ Edit</button>
+                            <button class="btn btn-danger" onclick="deleteFAQ(${subFaq.id})">🗑️ Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            div.innerHTML = `
+                <div class="faq-question">${faq.question}</div>
+                <div class="faq-answer">${formatMessageContent(faq.answer)}</div>
+                <div class="faq-actions">
+                    <button class="btn" onclick="editFAQ(${faq.id})">✏️ Edit</button>
+                    <button class="btn" onclick="addSubFAQ(${faq.id})">➕ Add Sub-FAQ</button>
+                    <button class="btn btn-danger" onclick="deleteFAQ(${faq.id})">🗑️ Delete</button>
+                </div>
+                <div class="sub-faqs">
+                    ${subFaqsHtml}
+                </div>
+            `;
+            return div;
+        }
+        
+        function updateParentFAQOptions() {
+            const select = document.getElementById('parent-faq');
+            select.innerHTML = '<option value="">None (Main FAQ)</option>';
+            
+            faqs.forEach(faq => {
+                const option = document.createElement('option');
+                option.value = faq.id;
+                option.textContent = faq.question;
+                select.appendChild(option);
+            });
+        }
+        
+        function showAddFAQModal() {
+            currentEditingFAQ = null;
+            document.getElementById('modal-title').textContent = 'Add New FAQ';
+            document.getElementById('faq-question').value = '';
+            document.getElementById('faq-answer').value = '';
+            document.getElementById('parent-faq').value = '';
+            document.getElementById('faq-modal').style.display = 'block';
+        }
+        
+        function addSubFAQ(parentId) {
+            currentEditingFAQ = null;
+            document.getElementById('modal-title').textContent = 'Add Sub-FAQ';
+            document.getElementById('faq-question').value = '';
+            document.getElementById('faq-answer').value = '';
+            document.getElementById('parent-faq').value = parentId;
+            document.getElementById('faq-modal').style.display = 'block';
+        }
+        
+        function editFAQ(faqId) {
+            const faq = findFAQById(faqId);
+            if (!faq) return;
+            
+            currentEditingFAQ = faqId;
+            document.getElementById('modal-title').textContent = 'Edit FAQ';
+            document.getElementById('faq-question').value = faq.question;
+            document.getElementById('faq-answer').value = faq.answer;
+            document.getElementById('parent-faq').value = faq.parent_id || '';
+            document.getElementById('faq-modal').style.display = 'block';
+        }
+        
+        function findFAQById(id) {
+            for (const faq of faqs) {
+                if (faq.id === id) return faq;
+                for (const subFaq of faq.sub_faqs) {
+                    if (subFaq.id === id) return subFaq;
+                }
+            }
+            return null;
+        }
+        
+        function closeFAQModal() {
+            document.getElementById('faq-modal').style.display = 'none';
+        }
+        
+        document.getElementById('faq-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const question = document.getElementById('faq-question').value;
+            const answer = document.getElementById('faq-answer').value;
+            const parentId = document.getElementById('parent-faq').value || null;
+            
+            try {
+                if (currentEditingFAQ) {
+                    // Update existing FAQ
+                    await fetch(`/api/faqs/${currentEditingFAQ}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({question, answer})
+                    });
+                } else {
+                    // Add new FAQ
+                    await fetch('/api/faqs', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({question, answer, parent_id: parentId})
+                    });
+                }
+                
+                closeFAQModal();
+                loadFAQs();
+            } catch (error) {
+                alert('Error saving FAQ: ' + error.message);
+            }
+        });
+        
+        async function deleteFAQ(faqId) {
+            if (!confirm('Are you sure you want to delete this FAQ and all its sub-FAQs?')) return;
+            
+            try {
+                await fetch(`/api/faqs/${faqId}`, {method: 'DELETE'});
+                loadFAQs();
+            } catch (error) {
+                alert('Error deleting FAQ: ' + error.message);
+            }
+        }
+        
+        function exportFAQs() {
+            window.open('/api/export-faqs', '_blank');
+        }
+        
+        function importFAQs() {
+            const fileInput = document.getElementById('import-file-excel');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select an Excel file to import');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/api/import-faqs', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert(result.message);
+                    loadFAQs();
+                    fileInput.value = '';
+                } else {
+                    alert('Error importing Excel file: ' + result.error);
+                }
+            })
+            .catch(error => {
+                alert('Error uploading Excel file: ' + error.message);
+            });
+        }
+
+        // Chat simulation functions
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessageToChat(message, 'user');
+            input.value = '';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message})
+                });
+                
+                const data = await response.json();
+                
+                // Normalize response shape: can be string or { text, images }
+                let botText = '';
+                let botImages = [];
+                if (typeof data.response === 'string') {
+                    botText = data.response;
+                } else if (data.response && typeof data.response === 'object') {
+                    botText = data.response.text || '';
+                    if (Array.isArray(data.response.images)) {
+                        botImages = data.response.images;
+                    }
+                }
+                
+                // Add bot response with optional images
+                addMessageToChat(botText, 'bot', botImages);
+                
+                // Add FAQ suggestions
+                if (data.suggestions && data.suggestions.length > 0) {
+                    addSuggestions(data.suggestions);
+                }
+            } catch (error) {
+                addMessageToChat('Sorry, there was an error processing your message.', 'bot');
+            }
+        }
+        
+        function addMessageToChat(message, sender, images = []) {
+            const chatArea = document.getElementById('chat-area');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            // Format phone numbers and other content for better display
+            const formattedMessage = formatMessageContent(message);
+            messageDiv.innerHTML = formattedMessage;
+
+            // If images provided, render a small grid under the text
+            if (Array.isArray(images) && images.length > 0) {
+                const grid = document.createElement('div');
+                grid.className = 'image-grid';
+                images.slice(0, 3).forEach(src => {
+                    try {
+                        const img = document.createElement('img');
+                        img.src = src;
+                        img.alt = 'related image';
+                        img.loading = 'lazy';
+                        img.onerror = () => { img.style.display = 'none'; };
+                        grid.appendChild(img);
+                    } catch (e) {}
+                });
+                messageDiv.appendChild(grid);
+            }
+            
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+        
+        function formatMessageContent(message) {
+            // Replace phone numbers with proper line breaks
+            let formatted = message
+                // Handle phone numbers separated by commas
+                .replace(/(\+\d{3}\s\d{8}),\s*(\+\d{3}\s\d{8})/g, '$1<br>$2')
+                // Handle multiple phone numbers in sequence
+                .replace(/(\+\d{3}\s\d{8}),\s*/g, '$1<br>')
+                // Handle phone numbers with different formats
+                .replace(/(\+\d{1,4}\s?\d{4,8}),\s*/g, '$1<br>')
+                // Replace newline characters with HTML breaks
+                .replace(/\n/g, '<br>')
+                // Handle "call us at:" followed by phone numbers
+                .replace(/(call us at:)\s*(\+\d)/gi, '$1<br>$2');
+            
+            // Handle long URLs - make them clickable and shortened
+            formatted = formatLinks(formatted);
+            
+            return formatted;
+        }
+        
+        function formatLinks(text) {
+            // URL regex pattern to match http/https URLs
+            const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+            
+            return text.replace(urlRegex, function(url) {
+                // Remove trailing punctuation that might not be part of the URL
+                const cleanUrl = url.replace(/[.,;:!?]+$/, '');
+                const trailingPunc = url.substring(cleanUrl.length);
+                
+                // Create shortened display text
+                let displayText;
+                if (cleanUrl.length > 50) {
+                    // Extract domain for display
+                    try {
+                        const urlObj = new URL(cleanUrl);
+                        const domain = urlObj.hostname.replace('www.', '');
+                        displayText = `${domain}...`;
+                    } catch (e) {
+                        // Fallback if URL parsing fails
+                        displayText = cleanUrl.substring(0, 30) + '...';
+                    }
+                } else {
+                    displayText = cleanUrl;
+                }
+                
+                return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" style="color: #25D366; text-decoration: underline; word-break: break-all;">${displayText}</a>${trailingPunc}`;
+            });
+        }
+        
+        let usedSuggestions = new Set(); // Track which suggestions have been used
+        
+        function addSuggestions(suggestions) {
+            const chatArea = document.getElementById('chat-area');
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'suggestions';
+            
+            suggestions.forEach(suggestion => {
+                const btn = document.createElement('button');
+                btn.className = usedSuggestions.has(suggestion.id) ? 'suggestion-btn used' : 'suggestion-btn';
+                btn.textContent = suggestion.question;
+                btn.onclick = (event) => selectSuggestion(suggestion.id, event);
+                suggestionsDiv.appendChild(btn);
+            });
+            
+            chatArea.appendChild(suggestionsDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+        
+        async function selectSuggestion(faqId, event) {
+            try {
+                // Mark this suggestion as used
+                usedSuggestions.add(faqId);
+                
+                // Update the appearance of the clicked button immediately
+                event.target.classList.add('used');
+                
+                const response = await fetch(`/api/faq-answer/${faqId}`);
+                const data = await response.json();
+                
+                addMessageToChat(data.answer, 'bot');
+                
+                if (data.sub_faqs && data.sub_faqs.length > 0) {
+                    addSuggestions(data.sub_faqs);
+                }
+            } catch (error) {
+                addMessageToChat('Sorry, there was an error getting the FAQ answer.', 'bot');
+            }
+        }
+        
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendTestWhatsApp() {
+            const to = document.getElementById('test-to').value.trim();
+            const message = document.getElementById('test-message').value.trim();
+            const result = document.getElementById('test-result');
+
+            if (!to) {
+                alert('Please enter recipient phone number in E.164 format');
+                return;
+            }
+
+            result.textContent = 'Sending...';
+            try {
+                const resp = await fetch('/api/send-test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, message })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    result.style.color = '#2e7d32';
+                    result.textContent = 'Sent! Message ID: ' + (data.response && data.response.messages && data.response.messages[0] ? data.response.messages[0].id : 'N/A');
+                } else {
+                    result.style.color = '#c62828';
+                    result.textContent = 'Failed: ' + (data.error || JSON.stringify(data.response));
+                }
+            } catch (e) {
+                result.style.color = '#c62828';
+                result.textContent = 'Error: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
