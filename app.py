@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import json
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime, timedelta
 import sqlite3
 from io import BytesIO
@@ -10,14 +12,8 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-# REPLACE lines 13-14 with:
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN')
-ACCESS_TOKEN = os.environ.get('ACCESS_TOKEN')
+from werkzeug.security import generate_password_hash, check_password_hash
+from urllib.parse import urljoin
 from html import unescape
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
