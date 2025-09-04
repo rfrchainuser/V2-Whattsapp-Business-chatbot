@@ -582,6 +582,7 @@ def api_clear_training():
 def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
+    HANDOFF_MSG = "Thank you for your message. Our team will respond to you shortly."
     # Content moderation for chat UI as well
     if message and is_moderated(message):
         warn = "🚫 Content Guidelines Reminder\nYour message contains language that doesn't align with our professional community guidelines. Please revise your content to maintain a respectful environment."
@@ -590,11 +591,11 @@ def api_chat():
         return jsonify({'response': warn, 'suggestions': suggestions})
     # Human handoff: do not auto-reply if user is asking for additional inquiries
     if message and is_additional_inquiries(message):
-        # Frontend will respect no_reply flag and not render a bot message
-        return jsonify({'response': '', 'suggestions': [], 'no_reply': True})
+        session['handoff'] = True
+        return jsonify({'response': HANDOFF_MSG, 'suggestions': [], 'restart_option': True})
     # If a previous selection triggered handoff, do not auto-reply to subsequent messages
     if session.get('handoff', False) and message:
-        return jsonify({'response': '', 'suggestions': [], 'no_reply': True})
+        return jsonify({'response': HANDOFF_MSG, 'suggestions': [], 'restart_option': True})
     # First-time behavior: greet only on the first NON-empty user message.
     if not session.get('welcomed_user', False):
         if message:
@@ -625,11 +626,19 @@ def api_faq_answer(faq_id):
     cursor.execute('SELECT id, question, answer FROM faqs WHERE parent_id = ?', (faq_id,))
     subs = cursor.fetchall()
     conn.close()
-    # If this FAQ represents Additional Inquiries, enable handoff in session
+    # If this FAQ represents Additional Inquiries, enable handoff in session and override answer
     try:
         qtext = (row[1] or '').strip()
         if re.search(r"\badditional\s+inquir", qtext, re.IGNORECASE):
             session['handoff'] = True
+            handoff_text = "Thank you for your message. Our team will respond to you shortly."
+            return jsonify({
+                'id': row[0],
+                'question': row[1],
+                'answer': handoff_text,
+                'restart_option': True,
+                'sub_faqs': [{'id': s[0], 'question': s[1], 'answer': s[2]} for s in subs]
+            })
     except Exception:
         pass
     return jsonify({
@@ -653,6 +662,19 @@ def api_send_test():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/restart', methods=['POST'])
+@login_required
+def api_restart():
+    try:
+        # Clear handoff and welcome state for a fresh start
+        session.pop('handoff', None)
+        session.pop('welcomed_user', None)
+        greeting = get_setting('greeting_message', 'Hello!')
+        suggestions = get_main_faq_suggestions(limit=9)
+        return jsonify({'response': greeting, 'suggestions': suggestions})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # JSON error handlers to avoid HTML responses in API calls
 @app.errorhandler(RequestEntityTooLarge)
@@ -756,6 +778,7 @@ def webhook():
                 return 'Moderated', 200
             # Human handoff: if guest mentions additional inquiries, do not auto-reply; leave for staff
             if text and is_additional_inquiries(text):
+                send_whatsapp_message(sender, "Thank you for your message. Our team will respond to you shortly.")
                 return 'Handoff to human', 200
             # Greeting logic per WhatsApp sender
             try:
