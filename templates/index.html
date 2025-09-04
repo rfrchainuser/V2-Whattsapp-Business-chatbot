@@ -809,6 +809,8 @@
                 
                 closeFAQModal();
                 loadFAQs();
+                // Ensure suggestion palettes reflect the latest main FAQs
+                refreshSuggestions();
             } catch (error) {
                 alert('Error saving FAQ: ' + error.message);
             }
@@ -820,6 +822,8 @@
             try {
                 await fetch(`/api/faqs/${faqId}`, {method: 'DELETE'});
                 loadFAQs();
+                // Refresh suggestion palettes after deletion
+                refreshSuggestions();
             } catch (error) {
                 alert('Error deleting FAQ: ' + error.message);
             }
@@ -850,6 +854,8 @@
                 if (result.success) {
                     alert(result.message);
                     loadFAQs();
+                    // Refresh palettes to include the newly imported FAQs
+                    refreshSuggestions();
                     fileInput.value = '';
                 } else {
                     alert('Error importing Excel file: ' + result.error);
@@ -883,6 +889,22 @@
             } catch (e) {
                 // Ignore init errors silently to not block UI
                 console.warn('Init chat failed:', e);
+            }
+        }
+        // Refresh suggestion palettes based on current FAQs
+        async function refreshSuggestions() {
+            try {
+                const resp = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: '' })
+                });
+                const data = await resp.json();
+                if (Array.isArray(data.suggestions)) {
+                    addSuggestions(data.suggestions);
+                }
+            } catch (e) {
+                console.warn('Refresh suggestions failed:', e);
             }
         }
         async function sendMessage() {
@@ -1024,6 +1046,8 @@
         
         function addSuggestions(suggestions) {
             const chatArea = document.getElementById('chat-area');
+            // Remove any existing suggestion blocks before adding new ones
+            chatArea.querySelectorAll('.suggestions').forEach(el => el.remove());
             const suggestionsDiv = document.createElement('div');
             suggestionsDiv.className = 'suggestions';
             
