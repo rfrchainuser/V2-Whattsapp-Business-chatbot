@@ -17,6 +17,7 @@ from urllib.parse import urljoin
 from html import unescape
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps
 
 # Optional dependencies for Excel import/export
 try:
@@ -162,11 +163,23 @@ def is_moderated(content):
 
 # Login required decorator
 def login_required(f):
+    @wraps(f)
     def wrapper(*args, **kwargs):
         if 'logged_in' not in session:
+            # If this looks like an API/AJAX request, return JSON 401 instead of HTML redirect
+            wants_json = (
+                request.is_json or (
+                    request.accept_mimetypes and
+                    request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html
+                ) or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            )
+            # For any non-GET (e.g., POST uploads), prefer JSON 401 to avoid HTML responses
+            if request.method != 'GET':
+                wants_json = True
+            if wants_json:
+                return jsonify({'error': 'Unauthorized'}), 401
             return redirect(url_for('login'))
         return f(*args, **kwargs)
-    wrapper.__name__ = f.__name__
     return wrapper
 
 @app.route('/')
@@ -421,7 +434,7 @@ def save_to_knowledge(data):
 @login_required
 def export_faqs():
     if not PANDAS_AVAILABLE or not OPENPYXL_AVAILABLE:
-        return 'Excel export requires pandas and openpyxl installed.', 400
+        return jsonify({'error': 'Excel export requires pandas and openpyxl installed.'}), 400
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query('SELECT * FROM faqs', conn)
     conn.close()
@@ -435,16 +448,51 @@ def export_faqs():
 @login_required
 def import_faqs():
     if not PANDAS_AVAILABLE or not OPENPYXL_AVAILABLE:
-        return 'Excel import requires pandas and openpyxl installed.', 400
+        return jsonify({'error': 'Excel import requires pandas and openpyxl installed.'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request.'}), 400
     file = request.files['file']
-    df = pd.read_excel(file)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    for _, row in df.iterrows():
-        cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)',
-                       (row['question'], row['answer'], row.get('parent_id')))
-    conn.commit()
-    conn.close()
+    if file.filename == '':
+        return jsonify({'error': 'No selected file.'}), 400
+    try:
+        df = pd.read_excel(file)
+    except Exception as e:
+        return jsonify({'error': f'Failed to read Excel file: {str(e)}'}), 400
+    # Validate required columns
+    required = {'question', 'answer'}
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        return jsonify({'error': f"Missing required columns: {', '.join(missing)}"}), 400
+    # Optional parent_id
+    has_parent = 'parent_id' in df.columns
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        for _, row in df.iterrows():
+            q = row['question']
+            a = row['answer']
+            pid = None
+            if has_parent:
+                val = row['parent_id']
+                try:
+                    # Treat NaN/None/empty as NULL
+                    if pd.isna(val) or val == '':
+                        pid = None
+                    else:
+                        pid = int(val)
+                except Exception:
+                    return jsonify({'error': f'Invalid parent_id value: {val}'}), 400
+            cursor.execute('INSERT INTO faqs (question, answer, parent_id) VALUES (?, ?, ?)', (q, a, pid))
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'error': f'Database error during import: {str(e)}'}), 500
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
     return jsonify({'success': True})
-
- 
