@@ -9,6 +9,21 @@ const port = process.env.PORT || 3000;
 // Middleware
 app.use(bodyParser.json());
 
+// Configuration: Greeting message and moderation keywords
+const GREETING_MESSAGE = process.env.GREETING_MESSAGE || 'Dear Esteemed Guest, Welcome to Souq Waqif Boutique Hotels by Tivoli. I am your Virtual Butler and remain at your service. Please select from the options below for your convenience.';
+const MODERATION_WARNING = 'Your message contains blocked content. Please rephrase.';
+const badWords = [
+    'badword1',
+    'badword2'
+    // Add more prohibited words/phrases as needed
+];
+
+function isModerated(text) {
+    if (!text) return false;
+    const lower = String(text).toLowerCase();
+    return badWords.some(w => lower.includes(w.toLowerCase()));
+}
+
 // Webhook verification
 app.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
@@ -95,6 +110,12 @@ function handleMessage(from, messageBody) {
     // Convert to lowercase for easier matching
     const lowerCaseMessage = messageBody.toLowerCase().trim();
 
+    // Content moderation first
+    if (isModerated(lowerCaseMessage)) {
+        console.log('⚠️ Moderated content detected. Sending warning.');
+        return sendMessage(from, MODERATION_WARNING);
+    }
+
     // FAQ Logic - Add your business-specific responses here
     if (lowerCaseMessage.includes('hi') || lowerCaseMessage.includes('hello') || lowerCaseMessage.includes('hey')) {
         reply = `Hello! Welcome to our business. How can we help you today? 😊`;
@@ -111,7 +132,8 @@ function handleMessage(from, messageBody) {
     } else if (lowerCaseMessage.includes('bye') || lowerCaseMessage.includes('goodbye')) {
         reply = `Thank you for contacting us! Have a great day! 👋`;
     } else {
-        reply = `Thank you for your message! Our team will get back to you shortly. For immediate assistance, please call us during business hours.`;
+        // Fallback to Virtual Butler greeting when no known answer matches
+        reply = GREETING_MESSAGE;
     }
 
     console.log(`🤖 Bot reply: "${reply}"`);
@@ -204,4 +226,5 @@ app.listen(port, () => {
     } else {
         console.log('✅ All required environment variables are set');
     }
+
 });
