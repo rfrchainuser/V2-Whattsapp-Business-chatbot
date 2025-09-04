@@ -238,7 +238,8 @@ def login():
         if row and check_password_hash(row[0], password):
             session['logged_in'] = True
             return redirect(url_for('index'))
-        return 'Invalid credentials'
+        # Render inline error on the login page
+        return render_template('login.html', error='Invalid username or password.')
     return render_template('login.html')
 
 @app.route('/logout')
