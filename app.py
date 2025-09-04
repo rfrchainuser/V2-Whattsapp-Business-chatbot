@@ -378,7 +378,19 @@ def api_import_faqs():
 def api_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '').strip()
-    response_text = find_response(message) if message else get_setting('greeting_message', 'Hello!')
+    # First-time behavior: greet only on the first NON-empty user message.
+    if not session.get('welcomed_user', False):
+        if message:
+            # First actual user message -> send admin greeting and mark welcomed
+            response_text = get_setting('greeting_message', 'Hello!')
+            session['welcomed_user'] = True
+        else:
+            # Empty init call from frontend -> show greeting but DO NOT mark welcomed yet
+            response_text = get_setting('greeting_message', 'Hello!')
+    else:
+        response_text = find_response(message) if message else get_setting('greeting_message', 'Hello!')
+        # Avoid dumping entire web pages from knowledge base
+        response_text = _truncate_response(response_text, limit=600)
     # Provide suggestions: show main FAQs for first message or always include some
     suggestions = get_main_faq_suggestions(limit=6)
     return jsonify({'response': response_text, 'suggestions': suggestions})
@@ -534,6 +546,14 @@ def find_response(query):
     if row:
         return row[0]
     return 'Sorry, I don\'t have an answer for that. Please contact support.'
+
+# Helper: keep responses concise for UI
+def _truncate_response(text, limit=600):
+    try:
+        s = re.sub(r'\s+', ' ', str(text)).strip()
+        return (s[:limit] + '…') if len(s) > limit else s
+    except Exception:
+        return text
 
 # Helper: fetch top-level FAQs as suggestions
 def get_main_faq_suggestions(limit=6):
