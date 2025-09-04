@@ -977,6 +977,10 @@
                 });
                 
                 const data = await response.json();
+                // Human handoff: if backend indicates no_reply, skip bot message entirely
+                if (data && data.no_reply) {
+                    return;
+                }
                 
                 // Normalize response shape: can be string or { text, images }
                 let botText = '';
@@ -991,7 +995,9 @@
                 }
                 
                 // Add bot response with optional images
-                addMessageToChat(botText, 'bot', botImages);
+                if (botText) {
+                    addMessageToChat(botText, 'bot', botImages);
+                }
                 
                 // Add FAQ suggestions
                 if (data.suggestions && data.suggestions.length > 0) {
